@@ -1,0 +1,57 @@
+import axios from 'axios'
+
+const api = axios.create({
+  baseURL: 'http://localhost:520',
+  timeout: 30000
+})
+
+// Stats
+export const getStats = () => api.get('/api/stats')
+
+// Auth
+export const register = (data) => api.post('/api/auth/register', data, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
+export const login = (data) => api.post('/api/auth/login', data, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
+export const getMe = (token) => api.get('/api/auth/me', { params: { token } })
+
+// Get token helper
+export function getToken() {
+  return localStorage.getItem('diary_token') || ''
+}
+
+// Messages
+export const getMessages = (token = '') => api.get('/api/messages', { params: { token } })
+export const createMessage = (data) => api.post('/api/messages', data, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
+export const updateMessage = (id, data) => api.put(`/api/messages/${id}`, data, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
+export const deleteMessage = (id, token) => api.delete(`/api/messages/${id}`, {
+  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  data: new URLSearchParams({ token })
+})
+export const likeMessage = (id, userHash) => api.post(`/api/messages/${id}/like`, new URLSearchParams({ user_hash: userHash }))
+
+// Photos
+export const getPhotos = (token = '') => api.get('/api/photos', { params: { token } })
+export const uploadPhoto = (formData) => api.post('/api/photos', formData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
+export const updatePhoto = (id, data) => api.put(`/api/photos/${id}`, data, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
+export const likePhoto = (id, userHash) => api.post(`/api/photos/${id}/like`, new URLSearchParams({ user_hash: userHash }))
+export const getComments = (photoId) => api.get(`/api/photos/${photoId}/comments`)
+export const addComment = (photoId, data) => api.post(`/api/photos/${photoId}/comments`, data, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
+export const deletePhoto = (id, token) => api.delete(`/api/photos/${id}`, {
+  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  data: new URLSearchParams({ token })
+})
+
+export default api

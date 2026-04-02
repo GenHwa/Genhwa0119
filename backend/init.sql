@@ -1,0 +1,20 @@
+-- 创建数据库（如果不存在）
+CREATE DATABASE IF NOT EXISTS love_letter DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE love_letter;
+
+-- 留言表
+CREATE TABLE IF NOT EXISTS messages (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nickname VARCHAR(100) NOT NULL DEFAULT '匿名',
+    content TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    mood VARCHAR(50) DEFAULT 'love'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 照片表
+CREATE TABLE IF NOT EXISTS photos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    filename VARCHAR(255) NOT NULL,
+    caption VARCHAR(500) DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
