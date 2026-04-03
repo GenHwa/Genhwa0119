@@ -23,7 +23,7 @@
           </button>
           <!-- User menu -->
           <div v-else class="user-menu">
-            <span class="login-icon logged" :class="{ 'has-avatar': currentUser.avatar }" @click="showUserMenu = !showUserMenu">{{ currentUser.avatar ? '' : (currentUser.nickname?.charAt(0) || currentUser.username?.charAt(0)) }}<img v-if="currentUser.avatar" :src="UPLOAD_BASE + currentUser.avatar" class="avatar-img" /></span>
+            <span class="login-icon logged" :class="{ 'has-avatar': currentUser.avatar }" @click.stop="showUserMenu = !showUserMenu">{{ currentUser.avatar ? '' : (currentUser.nickname?.charAt(0) || currentUser.username?.charAt(0)) }}<img v-if="currentUser.avatar" :src="UPLOAD_BASE + currentUser.avatar" class="avatar-img" /></span>
             <transition name="fade">
               <div v-show="showUserMenu" class="user-dropdown" @click.stop>
                 <div class="ud-name">{{ currentUser.nickname || currentUser.username }}</div>
