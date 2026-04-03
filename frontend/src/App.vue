@@ -176,7 +176,7 @@
         <!-- Profile Header -->
         <div class="profile-header">
           <div class="profile-avatar-wrap">
-            <div class="profile-avatar" :style="currentUser?.avatar ? `background-image: url('http://localhost:520/uploads/${currentUser.avatar}'); background-size: cover; background-position: center;` : ''" :class="{ 'no-avatar': !currentUser?.avatar }" @dblclick="miniEgg">
+            <div class="profile-avatar" :style="currentUser?.avatar ? `background-image: url('${UPLOAD_BASE}${currentUser.avatar}'); background-size: cover; background-position: center;` : ''" :class="{ 'no-avatar': !currentUser?.avatar }" @dblclick="miniEgg">
               <span v-if="!currentUser?.avatar" style="color:#8e8e8e;font-size:24px;font-weight:300">diary</span>
             </div>
             <div class="avatar-ring"></div>
@@ -677,6 +677,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import * as api from './api.js'
+import { BASE_URL } from './api.js'
 
 // ============ i18n ============
 const currentLang = ref('ko')
@@ -1374,7 +1375,7 @@ async function handleDeleteMsg(msgId) {
 
 // ============ Helpers ============
 function getPhotoUrl(filename) {
-  return `http://localhost:520/uploads/${filename}`
+  return `${UPLOAD_BASE}${filename}`
 }
 
 function showToast(message, type = 'success') {
@@ -1662,7 +1663,7 @@ async function changePassword() {
 }
 
 // Avatar helpers
-const UPLOAD_BASE = 'http://localhost:520/uploads/'
+const UPLOAD_BASE = BASE_URL + '/uploads/'
 function getAvatarUrl(avatar) {
   return avatar ? (UPLOAD_BASE + avatar) : null
 }
