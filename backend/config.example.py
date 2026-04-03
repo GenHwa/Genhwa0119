@@ -14,6 +14,10 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 # CORS
 ALLOWED_ORIGINS = [
+    "http://genhwa.online",
+    "https://genhwa.online",
+
+    # 本地开发可以保留
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
