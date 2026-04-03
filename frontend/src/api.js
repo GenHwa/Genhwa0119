@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-export const BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:520' : `http://${window.location.hostname}:5000`
+export const BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:520' : `http://${window.location.hostname}:520`
 
 const api = axios.create({
   baseURL: BASE_URL,
