@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 export const BASE_URL = ''
-export const UPLOAD_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') ? 'http://localhost:520/uploads/' : `http://${window.location.hostname}:520/uploads/`
+export const UPLOAD_BASE = '/uploads/'
 
 const api = axios.create({
   baseURL: BASE_URL,
