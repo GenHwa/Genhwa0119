@@ -1,5 +1,5 @@
 <template>
-  <div class="app" :class="{ 'egg-active': showEggPage, 'dark-mode': darkMode }">
+  <div class="app" :class="{ 'egg-active': showEggPage, 'dark-mode': darkMode }" @click="showUserMenu = false">
     <!-- Floating petals -->
     <div class="petals">
       <span v-for="i in 12" :key="i" class="petal" :style="petalStyle(i)">·</span>
@@ -22,8 +22,8 @@
             <span class="login-icon">👤</span>
           </button>
           <!-- User menu -->
-          <div v-else class="user-menu" @mouseenter="showUserMenu = true" @mouseleave="showUserMenu = false">
-            <span class="login-icon logged" :class="{ 'has-avatar': currentUser.avatar }">{{ currentUser.avatar ? '' : (currentUser.nickname?.charAt(0) || currentUser.username?.charAt(0)) }}<img v-if="currentUser.avatar" :src="UPLOAD_BASE + currentUser.avatar" class="avatar-img" /></span>
+          <div v-else class="user-menu">
+            <span class="login-icon logged" :class="{ 'has-avatar': currentUser.avatar }" @click="showUserMenu = !showUserMenu">{{ currentUser.avatar ? '' : (currentUser.nickname?.charAt(0) || currentUser.username?.charAt(0)) }}<img v-if="currentUser.avatar" :src="UPLOAD_BASE + currentUser.avatar" class="avatar-img" /></span>
             <transition name="fade">
               <div v-show="showUserMenu" class="user-dropdown" @click.stop>
                 <div class="ud-name">{{ currentUser.nickname || currentUser.username }}</div>
@@ -1988,8 +1988,7 @@ body{
 .lang-btn.active{background:var(--bg-card);color:var(--text);border:1px solid var(--border);font-weight:600}
 
 /* ============ HEADER SEARCH ============ */
-.header-search{display:flex;align-items:center;gap:6px;background:var(--bg);border-radius:10px;padding:6px 10px;border:1px solid transparent;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);width:36px;height:36px;overflow:hidden}
-.header-search:hover,.header-search.focused,.header-search:focus-within{width:180px;border-color:var(--border);box-shadow:0 0 0 2px var(--border-light)}
+.header-search{display:flex;align-items:center;gap:6px;background:var(--bg);border-radius:10px;padding:6px 10px;border:1px solid var(--border);transition:all 0.3s cubic-bezier(0.4,0,0.2,1);width:180px;box-shadow:0 0 0 2px var(--border-light)}
 .hs-icon{width:18px;height:18px;flex-shrink:0;color:var(--text-light)}
 .hs-input{border:none;background:transparent;outline:none;font-size:13px;color:var(--text);width:100%;line-height:1.4}
 .hs-input::placeholder{color:var(--text-light);font-size:12px}
