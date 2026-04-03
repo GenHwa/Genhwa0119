@@ -776,8 +776,14 @@ const profileTab = ref('photos')
 const profilePhotoModal = ref(null)
 
 // Computed: my content
-const myPhotos = computed(() => photos.value.filter(p => p.user_id === currentUser.value?.id))
-const myMessages = computed(() => messages.value.filter(m => m.user_id === currentUser.value?.id))
+const myPhotos = computed(() => {
+  if (!currentUser.value) return []
+  return photos.value.filter(p => p.user_id == currentUser.value.id)
+})
+const myMessages = computed(() => {
+  if (!currentUser.value) return []
+  return messages.value.filter(m => m.user_id == currentUser.value.id)
+})
 
 // Login requirement popup
 const showLoginRequiredPopup = ref(false)
@@ -1607,7 +1613,7 @@ body{
   background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh;overflow-x:hidden;
   transition:transform 0.3s ease;
 }
-.app{max-width:480px;margin:0 auto;min-height:100vh;position:relative;overflow:hidden}
+.app{max-width:480px;margin:0 auto;min-height:100vh;position:relative}
 
 /* ============ PETALS ============ */
 .petals{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
@@ -1622,7 +1628,7 @@ body{
 
 /* ============ HEADER ============ */
 .header{
-  position:absolute;top:0;left:0;right:0;z-index:10;
+  position:sticky;top:0;z-index:10;
   background:rgba(253,251,247,0.92);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
   border-bottom:1px solid var(--border);
   box-shadow:0 1px 0 rgba(0,0,0,0.03);
@@ -1690,7 +1696,8 @@ body{
 
 /* ============ BOTTOM NAV ============ */
 .bottom-nav{
-  position:absolute;bottom:0;left:0;right:0;z-index:10;
+  position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+  width:100%;max-width:480px;z-index:10;
   background:rgba(255,255,255,0.98);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
   border-top:1px solid var(--border);
   display:flex;justify-content:space-around;padding:10px 0 env(safe-area-inset-bottom,12px);
@@ -1709,7 +1716,7 @@ body{
 .bnav-label{font-size:10px;letter-spacing:0.4px}
 
 /* ============ MAIN ============ */
-.main{padding:60px 0 80px;position:relative;z-index:1}
+.main{padding:0 0 20px;position:relative;z-index:1}
 .section{animation:fadeIn 0.4s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 
@@ -2013,7 +2020,7 @@ body{
 .post-time{padding:4px 16px 14px;font-size:10px;color:var(--text-light);letter-spacing:0.5px}
 
 /* ============ UPLOAD MODAL ============ */
-.modal-overlay{position:absolute;width:100%;min-height:100vh;top:0;left:0;z-index:9999;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.25s}
+.modal-overlay{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;padding:70px 20px 80px;animation:fadeIn 0.25s;overflow-y:auto}
 .modal{background:var(--bg-card);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:360px;box-shadow:var(--shadow-lg);border:1px solid var(--border);animation:modalPop 0.3s ease}
 @keyframes modalPop{from{opacity:0;transform:scale(0.92)}to{opacity:1;transform:scale(1)}}
 .modal-preview{width:100%;aspect-ratio:1;border-radius:var(--radius);overflow:hidden;margin-bottom:16px;box-shadow:0 4px 12px rgba(0,0,0,0.08)}
