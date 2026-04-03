@@ -23,7 +23,7 @@
           </button>
           <!-- User menu -->
           <div v-else class="user-menu" @mouseenter="showUserMenu = true" @mouseleave="showUserMenu = false">
-            <span class="login-icon logged" :style="getAvatarStyle(currentUser)" :class="{ 'no-avatar-text': currentUser.avatar }">{{ currentUser.avatar ? '' : (currentUser.nickname?.charAt(0) || currentUser.username?.charAt(0)) }}</span>
+            <span class="login-icon logged" :class="{ 'has-avatar': currentUser.avatar }">{{ currentUser.avatar ? '' : (currentUser.nickname?.charAt(0) || currentUser.username?.charAt(0)) }}<img v-if="currentUser.avatar" :src="UPLOAD_BASE + currentUser.avatar" class="avatar-img" /></span>
             <transition name="fade">
               <div v-show="showUserMenu" class="user-dropdown" @click.stop>
                 <div class="ud-name">{{ currentUser.nickname || currentUser.username }}</div>
@@ -78,8 +78,9 @@
           <!-- User results -->
           <div v-if="searchTab === 'users' && searchResults.length && !viewingUser" class="sp-results">
             <div v-for="user in searchResults" :key="user.id" class="sp-user-item" @click="viewUserProfile(user)">
-              <div class="sp-user-avatar" :style="user.avatar ? `background-image: url('${UPLOAD_BASE}${user.avatar}'); background-size: cover; background-position: center;` : ''" :class="{ 'no-avatar-text': user.avatar }">
-                <span v-if="!user.avatar">{{ (user.nickname || user.username).charAt(0) }}</span>
+              <div class="sp-user-avatar" :class="{ 'no-avatar-text': user.avatar }">
+                <img v-if="user.avatar" :src="UPLOAD_BASE + user.avatar" class="avatar-img" />
+                <span v-else>{{ (user.nickname || user.username).charAt(0) }}</span>
               </div>
               <div class="sp-user-info">
                 <span class="sp-user-name">{{ user.nickname || user.username }}</span>
@@ -100,8 +101,9 @@
           <!-- Message results -->
           <div v-if="searchTab === 'messages' && searchMsgResults.length && !viewingUser" class="sp-results">
             <div v-for="msg in searchMsgResults" :key="msg.id" class="sp-msg-item" @click="showSearchPanel = false; navigateTo('messages')">
-              <div class="sp-msg-avatar" :style="msg.author_avatar ? `background-image: url('${UPLOAD_BASE}${msg.author_avatar}'); background-size: cover; background-position: center;` : ''" :class="{ 'no-avatar-text': msg.author_avatar }">
-                <span v-if="!msg.author_avatar">{{ (msg.nickname || '?').charAt(0) }}</span>
+              <div class="sp-msg-avatar" :class="{ 'no-avatar-text': msg.author_avatar }">
+                <img v-if="msg.author_avatar" :src="UPLOAD_BASE + msg.author_avatar" class="avatar-img" />
+                <span v-else>{{ (msg.nickname || '?').charAt(0) }}</span>
               </div>
               <div class="sp-msg-info">
                 <span class="sp-msg-name">{{ msg.nickname || t('anonymous') }}</span>
@@ -116,8 +118,9 @@
               <span class="sp-up-title">{{ viewingUser.nickname || viewingUser.username }}</span>
             </div>
             <div class="sp-up-info">
-              <div class="sp-up-avatar" :style="viewingUser.avatar ? `background-image: url('${UPLOAD_BASE}${viewingUser.avatar}'); background-size: cover; background-position: center;` : ''" :class="{ 'no-avatar-text': viewingUser.avatar }">
-                <span v-if="!viewingUser.avatar">{{ (viewingUser.nickname || viewingUser.username).charAt(0) }}</span>
+              <div class="sp-up-avatar" :class="{ 'no-avatar-text': viewingUser.avatar }">
+                <img v-if="viewingUser.avatar" :src="UPLOAD_BASE + viewingUser.avatar" class="avatar-img" />
+                <span v-else>{{ (viewingUser.nickname || viewingUser.username).charAt(0) }}</span>
               </div>
               <div class="sp-up-meta">
                 <h3>{{ viewingUser.nickname || viewingUser.username }}</h3>
@@ -159,7 +162,7 @@
     </transition>
 
     <!-- Bottom Nav -->
-    <nav class="bottom-nav">
+    <nav v-if="currentUser" class="bottom-nav">
       <button v-for="item in navItems" :key="item.id"
         :class="['bnav-btn', { active: activeSection === item.id }]"
         @click="navigateTo(item.id)">
@@ -176,8 +179,9 @@
         <!-- Profile Header -->
         <div class="profile-header">
           <div class="profile-avatar-wrap">
-            <div class="profile-avatar" :style="currentUser?.avatar ? `background-image: url('${UPLOAD_BASE}${currentUser.avatar}'); background-size: cover; background-position: center;` : ''" :class="{ 'no-avatar': !currentUser?.avatar }" @dblclick="miniEgg">
-              <span v-if="!currentUser?.avatar" style="color:#8e8e8e;font-size:24px;font-weight:300">diary</span>
+            <div class="profile-avatar" :class="{ 'no-avatar': !currentUser?.avatar }" @dblclick="miniEgg">
+              <img v-if="currentUser?.avatar" :src="UPLOAD_BASE + currentUser.avatar" class="avatar-img" />
+              <span v-else style="color:#8e8e8e;font-size:24px;font-weight:300">diary</span>
             </div>
             <div class="avatar-ring"></div>
           </div>
@@ -267,8 +271,9 @@
           <div v-for="photo in photos" :key="photo.id" class="post-card" :class="{ 'post-private': photo.is_private }">
             <!-- Post Header -->
             <div class="post-header">
-              <div class="post-avatar" :style="photo.author_avatar ? `background-image: url('${UPLOAD_BASE}${photo.author_avatar}'); background-size: cover; background-position: center;` : ''" :class="{ 'no-avatar-text': photo.author_avatar }">
-                <span v-if="!photo.author_avatar" style="font-size:12px;color:#8e8e8e">●</span>
+              <div class="post-avatar" :class="{ 'no-avatar-text': photo.author_avatar }">
+                <img v-if="photo.author_avatar" :src="UPLOAD_BASE + photo.author_avatar" class="avatar-img" />
+                <span v-else style="font-size:12px;color:#8e8e8e">●</span>
               </div>
               <div class="post-user-info">
                 <span class="post-username">{{ photo.author_name || 'diary' }}</span>
@@ -373,8 +378,9 @@
           </div>
           <div class="cp-list">
             <div v-for="c in commentsList" :key="c.id" class="cp-item">
-              <div class="cp-avatar" :style="c.avatar ? `background-image: url('${UPLOAD_BASE}${c.avatar}'); background-size: cover; background-position: center;` : ''" :class="{ 'no-avatar-text': c.avatar }">
-                <span v-if="!c.avatar">{{ c.nickname.charAt(0) }}</span>
+              <div class="cp-avatar" :class="{ 'no-avatar-text': c.avatar }">
+                <img v-if="c.avatar" :src="UPLOAD_BASE + c.avatar" class="avatar-img" />
+                <span v-else>{{ c.nickname.charAt(0) }}</span>
               </div>
               <div class="cp-body">
                 <div class="cp-meta">
@@ -411,8 +417,9 @@
         <!-- Profile Header -->
         <div class="profile-header">
           <div class="profile-avatar-wrap">
-            <div class="profile-avatar lg-avatar" :style="getAvatarStyle(currentUser)" @click="avatarInput?.click()">
-              <span v-if="!currentUser?.avatar" style="color:#8e8e8e;font-size:22px;font-weight:300">diary</span>
+            <div class="profile-avatar lg-avatar" @click="avatarInput?.click()">
+              <img v-if="currentUser?.avatar" :src="UPLOAD_BASE + currentUser.avatar" class="avatar-img" />
+              <span v-else style="color:#8e8e8e;font-size:22px;font-weight:300">diary</span>
               <div class="avatar-edit-hint">✎</div>
             </div>
             <input ref="avatarInput" type="file" accept="image/*" style="display:none" @change="handleAvatarUpload">
@@ -495,8 +502,9 @@
             <img :src="getPhotoUrl(profilePhotoModal.filename)" class="ppm-img" />
             <div class="ppm-info">
               <div class="ppm-header">
-                <div class="post-avatar sm-avatar" :style="profilePhotoModal.author_avatar ? `background-image: url('${getPhotoUrl(profilePhotoModal.author_avatar)}'); background-size: cover; background-position: center;` : ''">
-                  <span v-if="!profilePhotoModal.author_avatar" style="font-size:12px;color:#8e8e8e">●</span>
+                <div class="post-avatar sm-avatar" :class="{ 'no-avatar-text': profilePhotoModal.author_avatar }">
+                  <img v-if="profilePhotoModal.author_avatar" :src="getPhotoUrl(profilePhotoModal.author_avatar)" class="avatar-img" />
+                  <span v-else style="font-size:12px;color:#8e8e8e">●</span>
                 </div>
                 <div>
                   <div class="ppm-author">{{ profilePhotoModal.author_name || 'diary' }}</div>
@@ -548,8 +556,9 @@
 
         <div class="msg-list" v-if="messages.length">
           <div v-for="msg in messages" :key="msg.id" class="msg-card" :class="{ 'msg-private': msg.is_private }">
-            <div class="msg-avatar" :style="msg.author_avatar ? `background-image: url('${UPLOAD_BASE}${msg.author_avatar}'); background-size: cover; background-position: center;` : ''" :class="{ 'no-avatar-text': msg.author_avatar }">
-              <span v-if="!msg.author_avatar">{{ msg.nickname.charAt(0) }}</span>
+            <div class="msg-avatar" :class="{ 'no-avatar-text': msg.author_avatar }">
+              <img v-if="msg.author_avatar" :src="UPLOAD_BASE + msg.author_avatar" class="avatar-img" />
+              <span v-else>{{ msg.nickname.charAt(0) }}</span>
             </div>
             <div class="msg-body">
               <div class="msg-meta">
@@ -1249,7 +1258,7 @@ function navigateTo(section) {
 }
 
 // Admin check
-const isAdmin = computed(() => currentUser.value?.username === 'genhwa_0119')
+const isAdmin = computed(() => currentUser.value?.username?.includes('genhwa'))
 
 function isMsgOwner(msg) {
   return isAdmin.value || (currentUser.value && msg.user_id && msg.user_id === currentUser.value.id)
@@ -1924,6 +1933,8 @@ body{
   border:1px solid var(--border);
   box-shadow:var(--shadow);
 }
+.login-icon.logged.has-avatar{padding:0;overflow:hidden}
+.avatar-img{width:100%;height:100%;object-fit:cover;display:block}
 .user-menu{position:relative}
 
 /* User dropdown */
