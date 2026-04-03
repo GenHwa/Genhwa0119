@@ -8,6 +8,14 @@ const api = axios.create({
 // Stats
 export const getStats = () => api.get('/api/stats')
 
+// User search
+export const searchUsers = (q) => api.get('/api/users/search', { params: { q } })
+export const searchPhotos = (q, token = '') => api.get('/api/photos/search', { params: { q, token } })
+export const searchMessages = (q, token = '') => api.get('/api/messages/search', { params: { q, token } })
+export const getUserPhotos = (userId, token = '') => api.get(`/api/users/${userId}/photos`, { params: { token } })
+export const followUser = (userId, token) => api.post(`/api/users/${userId}/follow`, new URLSearchParams({ token }))
+export const getFollowStatus = (userId, token = '') => api.get(`/api/users/${userId}/follow/status`, { params: { token } })
+
 // Auth
 export const register = (data) => api.post('/api/auth/register', data, {
   headers: { 'Content-Type': 'multipart/form-data' }

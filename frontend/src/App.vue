@@ -1,5 +1,5 @@
 <template>
-  <div class="app" :class="{ 'egg-active': showEggPage }">
+  <div class="app" :class="{ 'egg-active': showEggPage, 'dark-mode': darkMode }">
     <!-- Floating petals -->
     <div class="petals">
       <span v-for="i in 12" :key="i" class="petal" :style="petalStyle(i)">·</span>
@@ -9,37 +9,41 @@
     <header class="header">
       <div class="header-inner">
         <h1 class="logo" @click="logoClicks++; checkLogoEgg(); activeSection = 'home'">
-          <img src="/logo.svg" alt="diary" class="logo-img" />
+          <span class="logo-text">diary.</span>
         </h1>
         <div class="header-actions">
+          <!-- Search input -->
+          <div v-if="currentUser" class="header-search" :class="{ focused: headerSearchFocused || headerSearchVal.length }">
+            <svg class="hs-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            <input v-model="headerSearchVal" class="hs-input" :placeholder="t('searchAll')" @focus="onHeaderSearchFocus" @blur="onHeaderSearchBlur" @input="onHeaderSearchInput" />
+          </div>
           <!-- Login button -->
-          <button v-if="!currentUser" class="login-trigger" @click="showLoginModal = true">
+          <button v-if="!currentUser" class="login-trigger" @click="activeSection = 'login'">
             <span class="login-icon">👤</span>
           </button>
           <!-- User menu -->
-          <div v-else class="user-menu" @click="showUserMenu = !showUserMenu">
+          <div v-else class="user-menu" @mouseenter="showUserMenu = true" @mouseleave="showUserMenu = false">
             <span class="login-icon logged" :style="getAvatarStyle(currentUser)" :class="{ 'no-avatar-text': currentUser.avatar }">{{ currentUser.avatar ? '' : (currentUser.nickname?.charAt(0) || currentUser.username?.charAt(0)) }}</span>
             <transition name="fade">
-              <div v-if="showUserMenu" class="user-dropdown" @click.stop>
+              <div v-show="showUserMenu" class="user-dropdown" @click.stop>
                 <div class="ud-name">{{ currentUser.nickname || currentUser.username }}</div>
                 <button class="ud-item" @click="showUserMenu = false">{{ t('myPrivate') }}</button>
                 <button class="ud-item ud-logout" @click="logout">{{ t('logout') }}</button>
               </div>
             </transition>
           </div>
-          <div class="lang-switcher">
-            <button v-for="lang in languages" :key="lang.code"
-              :class="['lang-btn', { active: currentLang === lang.code }]"
-              @click="currentLang = lang.code">{{ lang.label }}</button>
-          </div>
         </div>
       </div>
     </header>
 
-    <!-- Login Modal -->
-    <transition name="fade">
-      <div v-if="showLoginModal" class="modal-overlay" @click.self="showLoginModal = false">
-        <div class="login-modal">
+    <!-- Login Page -->
+    <section v-if="activeSection === 'login'" class="section">
+      <div class="login-page">
+        <div class="lp-logo" @click="activeSection = 'home'">
+          <span class="logo-text">diary.</span>
+        </div>
+        <p class="lp-subtitle">{{ t('profileBio') }}</p>
+        <div class="lp-form">
           <div class="login-tabs">
             <button :class="['login-tab', { active: loginMode === 'login' }]" @click="loginMode = 'login'">{{ t('login') }}</button>
             <button :class="['login-tab', { active: loginMode === 'register' }]" @click="loginMode = 'register'">{{ t('register') }}</button>
@@ -53,6 +57,105 @@
           </button>
         </div>
       </div>
+    </section>
+
+    <!-- Search Panel -->
+    <transition name="fade">
+      <div v-if="showSearchPanel" class="search-overlay" @click.self="showSearchPanel = false; searchQuery = ''; searchResults = []; searchPhotoResults = []; searchMsgResults = []; viewingUser = null; userFollowStatus = { is_following: false, following_count: 0, followers_count: 0, posts_count: 0 }; headerSearchVal = ''">
+        <div class="search-panel">
+          <div class="search-panel-header">
+            <button class="sp-close" @click="showSearchPanel = false; searchQuery = ''; searchResults = []; searchPhotoResults = []; searchMsgResults = []; viewingUser = null; userFollowStatus = { is_following: false, following_count: 0, followers_count: 0, posts_count: 0 }; headerSearchVal = ''">×</button>
+            <div class="sp-input-wrap">
+              <input v-model="searchQuery" type="text" :placeholder="t('searchAll')" class="sp-input" @input="onUserSearch" ref="searchInput" />
+            </div>
+          </div>
+          <!-- Search tabs -->
+          <div v-if="searchQuery.trim() && !viewingUser" class="sp-tabs">
+            <button :class="['sp-tab', { active: searchTab === 'users' }]" @click="searchTab = 'users'">{{ t('users') }}<span v-if="searchResults.length" class="sp-tab-count">{{ searchResults.length }}</span></button>
+            <button :class="['sp-tab', { active: searchTab === 'posts' }]" @click="searchTab = 'posts'">{{ t('gallery') }}<span v-if="searchPhotoResults.length" class="sp-tab-count">{{ searchPhotoResults.length }}</span></button>
+            <button :class="['sp-tab', { active: searchTab === 'messages' }]" @click="searchTab = 'messages'">{{ t('messages') }}<span v-if="searchMsgResults.length" class="sp-tab-count">{{ searchMsgResults.length }}</span></button>
+          </div>
+          <!-- User results -->
+          <div v-if="searchTab === 'users' && searchResults.length && !viewingUser" class="sp-results">
+            <div v-for="user in searchResults" :key="user.id" class="sp-user-item" @click="viewUserProfile(user)">
+              <div class="sp-user-avatar" :style="user.avatar ? `background-image: url('${UPLOAD_BASE}${user.avatar}'); background-size: cover; background-position: center;` : ''" :class="{ 'no-avatar-text': user.avatar }">
+                <span v-if="!user.avatar">{{ (user.nickname || user.username).charAt(0) }}</span>
+              </div>
+              <div class="sp-user-info">
+                <span class="sp-user-name">{{ user.nickname || user.username }}</span>
+                <span class="sp-user-username">@{{ user.username }}</span>
+              </div>
+            </div>
+          </div>
+          <!-- Photo results -->
+          <div v-if="searchTab === 'posts' && searchPhotoResults.length && !viewingUser" class="sp-results">
+            <div v-for="photo in searchPhotoResults" :key="photo.id" class="sp-photo-item" @click="showSearchPanel = false; navigateTo('gallery'); setTimeout(() => openPhotoDetail(photo), 300)">
+              <div class="sp-photo-thumb"><img :src="getPhotoUrl(photo.filename)" /></div>
+              <div class="sp-photo-info">
+                <p class="sp-photo-caption">{{ photo.caption || t('noPhotos').split('\n')[0] }}</p>
+                <span class="sp-photo-author">{{ photo.author_name || t('anonymous') }}</span>
+              </div>
+            </div>
+          </div>
+          <!-- Message results -->
+          <div v-if="searchTab === 'messages' && searchMsgResults.length && !viewingUser" class="sp-results">
+            <div v-for="msg in searchMsgResults" :key="msg.id" class="sp-msg-item" @click="showSearchPanel = false; navigateTo('messages')">
+              <div class="sp-msg-avatar" :style="msg.author_avatar ? `background-image: url('${UPLOAD_BASE}${msg.author_avatar}'); background-size: cover; background-position: center;` : ''" :class="{ 'no-avatar-text': msg.author_avatar }">
+                <span v-if="!msg.author_avatar">{{ (msg.nickname || '?').charAt(0) }}</span>
+              </div>
+              <div class="sp-msg-info">
+                <span class="sp-msg-name">{{ msg.nickname || t('anonymous') }}</span>
+                <p class="sp-msg-content">{{ msg.content }}</p>
+              </div>
+            </div>
+          </div>
+          <!-- Viewing user profile -->
+          <div class="sp-user-profile" v-if="viewingUser">
+            <div class="sp-up-header" @click="viewingUser = null">
+              <span class="sp-up-back">←</span>
+              <span class="sp-up-title">{{ viewingUser.nickname || viewingUser.username }}</span>
+            </div>
+            <div class="sp-up-info">
+              <div class="sp-up-avatar" :style="viewingUser.avatar ? `background-image: url('${UPLOAD_BASE}${viewingUser.avatar}'); background-size: cover; background-position: center;` : ''" :class="{ 'no-avatar-text': viewingUser.avatar }">
+                <span v-if="!viewingUser.avatar">{{ (viewingUser.nickname || viewingUser.username).charAt(0) }}</span>
+              </div>
+              <div class="sp-up-meta">
+                <h3>{{ viewingUser.nickname || viewingUser.username }}</h3>
+                <p>@{{ viewingUser.username }}</p>
+              </div>
+              <button v-if="currentUser && currentUser.id !== viewingUser.id" class="sp-up-follow" :class="{ following: userFollowStatus.is_following }" @click.stop="toggleFollow">
+                {{ userFollowStatus.is_following ? t('following') : t('follow') }}
+              </button>
+            </div>
+            <div class="sp-up-stats">
+              <div class="sp-up-stat">
+                <span class="sp-up-stat-num">{{ userFollowStatus.posts_count }}</span>
+                <span class="sp-up-stat-label">{{ t('posts') }}</span>
+              </div>
+              <div class="sp-up-stat">
+                <span class="sp-up-stat-num">{{ userFollowStatus.followers_count }}</span>
+                <span class="sp-up-stat-label">{{ t('followers') }}</span>
+              </div>
+              <div class="sp-up-stat">
+                <span class="sp-up-stat-num">{{ userFollowStatus.following_count }}</span>
+                <span class="sp-up-stat-label">{{ t('following') }}</span>
+              </div>
+            </div>
+            <div class="sp-up-photos" v-if="userPhotos.length">
+              <div class="profile-grid">
+                <div v-for="photo in userPhotos" :key="photo.id" class="pg-item" @click="openPhotoDetail(photo)">
+                  <img :src="getPhotoUrl(photo.filename)" />
+                </div>
+              </div>
+            </div>
+            <div v-else class="sp-up-empty">{{ t('noPhotos') }}</div>
+          </div>
+          <!-- Empty state -->
+          <div class="sp-empty" v-if="searchQuery.trim() && !searchResults.length && !searchPhotoResults.length && !searchMsgResults.length && !viewingUser && !searchLoading">
+            <p>{{ t('noSearchResult') }}</p>
+          </div>
+        </div>
+      </div>
     </transition>
 
     <!-- Bottom Nav -->
@@ -60,7 +163,7 @@
       <button v-for="item in navItems" :key="item.id"
         :class="['bnav-btn', { active: activeSection === item.id }]"
         @click="navigateTo(item.id)">
-        <span class="bnav-icon">{{ item.icon }}</span>
+        <span class="bnav-icon" v-html="item.svg"></span>
         <span class="bnav-label">{{ t(item.id) }}</span>
       </button>
     </nav>
@@ -86,19 +189,19 @@
 
         <!-- Stats -->
         <div class="profile-stats">
-          <div class="pstat" @click="navigateTo('gallery')">
-            <span class="pstat-num">{{ stats.photos }}</span>
-            <span class="pstat-label">{{ t('photos') }}</span>
-          </div>
-          <div class="pstat-divider"></div>
-          <div class="pstat" @click="navigateTo('messages')">
-            <span class="pstat-num">{{ stats.messages }}</span>
-            <span class="pstat-label">{{ t('messages') }}</span>
+          <div class="pstat">
+            <span class="pstat-num">{{ myStats.posts_count }}</span>
+            <span class="pstat-label">{{ t('posts') }}</span>
           </div>
           <div class="pstat-divider"></div>
           <div class="pstat">
-            <span class="pstat-num">{{ stats.total_likes }}</span>
-            <span class="pstat-label">{{ t('likes') }}</span>
+            <span class="pstat-num">{{ myStats.followers_count }}</span>
+            <span class="pstat-label">{{ t('followers') }}</span>
+          </div>
+          <div class="pstat-divider"></div>
+          <div class="pstat">
+            <span class="pstat-num">{{ myStats.following_count }}</span>
+            <span class="pstat-label">{{ t('following') }}</span>
           </div>
         </div>
 
@@ -129,7 +232,6 @@
         <div class="section-head">
           <h2 class="section-title">{{ t('ourMoments') }}</h2>
           <div class="section-head-actions">
-            <input v-model="gallerySearch" type="text" :placeholder="t('searchPlaceholder')" class="inline-search" @keyup.enter="doGallerySearch" />
             <label class="upload-btn">
               <input type="file" accept="image/*" @change="onFileSelect" hidden />
               <span class="upload-icon">+</span>
@@ -161,8 +263,8 @@
         </div>
 
         <!-- Instagram Feed -->
-        <div class="feed" v-if="filteredPhotos.length">
-          <div v-for="photo in filteredPhotos" :key="photo.id" class="post-card" :class="{ 'post-private': photo.is_private }">
+        <div class="feed" v-if="photos.length">
+          <div v-for="photo in photos" :key="photo.id" class="post-card" :class="{ 'post-private': photo.is_private }">
             <!-- Post Header -->
             <div class="post-header">
               <div class="post-avatar" :style="photo.author_avatar ? `background-image: url('${UPLOAD_BASE}${photo.author_avatar}'); background-size: cover; background-position: center;` : ''" :class="{ 'no-avatar-text': photo.author_avatar }">
@@ -171,24 +273,29 @@
               <div class="post-user-info">
                 <span class="post-username">{{ photo.author_name || 'diary' }}</span>
                 <span class="post-location">{{ photo.location || t('inMyHeart') }}</span>
-                <span v-if="isPhotoOwner(photo)" class="msg-private-badge">{{ photo.is_private ? '🔒' : '🔓' }}</span>
-                <span v-else-if="photo.is_private" class="msg-private-badge">🔒</span>
+                <span v-if="isPhotoOwner(photo)" class="msg-private-badge"><span class="icon-line icon-sm" v-html="photo.is_private ? icons.lock : icons.unlock"></span></span>
+                <span v-else-if="photo.is_private" class="msg-private-badge"><span class="icon-line icon-sm" v-html="icons.lock"></span></span>
               </div>
               <!-- Owner actions -->
               <div v-if="isPhotoOwner(photo)" class="post-owner-actions">
-                <button class="post-action-sm" @click="startEditPhoto(photo)" title="edit">✏️</button>
-                <button class="post-action-sm" @click="togglePhotoPrivate(photo)" :title="photo.is_private ? t('setPublic') : t('setPrivate')">
-                  {{ photo.is_private ? '🔒' : '🔓' }}
-                </button>
-                <button class="post-action-sm" @click="handleDeletePhoto(photo.id)" title="delete">🗑️</button>
+                <button class="post-action-sm" @click="startEditPhoto(photo)" :title="t('editMsg')"><span class="icon-line" v-html="icons.edit"></span></button>
+                <button class="post-action-sm" @click="togglePhotoPrivate(photo)" :title="photo.is_private ? t('setPublic') : t('setPrivate')"><span class="icon-line" v-html="photo.is_private ? icons.lock : icons.unlock"></span></button>
+                <button class="post-action-sm" @click="handleDeletePhoto(photo.id)" :title="t('deleteMsg')"><span class="icon-line icon-delete" v-html="icons.trash"></span></button>
               </div>
             </div>
 
-            <!-- Edit photo caption -->
+            <!-- Edit photo caption & image -->
             <div v-if="editingPhotoId === photo.id" class="photo-edit-wrap">
+              <div class="photo-edit-img-change" style="padding:0 14px 8px">
+                <button class="pe-change-btn" @click="$refs['editFileInput_'+photo.id][0].click()">
+                  <span class="icon-line" v-html="icons.edit"></span> {{ t('changePhoto') }}
+                </button>
+                <input :ref="'editFileInput_'+photo.id" type="file" accept="image/*" style="display:none" @change="(e) => editingPhotoFile = e.target.files[0] || null" />
+                <span v-if="editingPhotoFile" class="pe-file-name">{{ editingPhotoFile.name }}</span>
+              </div>
               <input v-model="editingPhotoCaption" type="text" class="modal-input" :placeholder="t('writeCaption')" style="margin:0 14px 8px" />
               <div class="photo-edit-actions" style="padding:0 14px 12px;display:flex;gap:8px;justify-content:flex-end">
-                <button class="btn-cancel" @click="editingPhotoId = null" style="font-size:12px;padding:6px 14px">{{ t('cancel') }}</button>
+                <button class="btn-cancel" @click="editingPhotoId = null; editingPhotoFile = null" style="font-size:12px;padding:6px 14px">{{ t('cancel') }}</button>
                 <button class="btn-confirm" @click="confirmEditPhoto(photo.id)" style="font-size:12px;padding:6px 14px">{{ t('save') }}</button>
               </div>
             </div>
@@ -207,9 +314,11 @@
               <div class="post-actions-left">
                 <button :class="['action-btn', { liked: photoLikedSet.has(photo.id) }]"
                   @click="togglePhotoLike(photo)">
-                  {{ photoLikedSet.has(photo.id) ? '⭐' : '☆' }}
+                  <svg class="heart-icon" :class="{ filled: photoLikedSet.has(photo.id) }" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
                 </button>
-                <button class="action-btn" @click="openComments(photo)">💬</button>
+                <button class="action-btn" @click="openComments(photo)">
+                  <svg class="comment-icon" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
               </div>
               <button class="action-btn" @click="bookmarkEgg">🔖</button>
             </div>
@@ -318,11 +427,28 @@
         <!-- Login Required -->
         <div v-if="!currentUser" class="profile-login-required">
           <p>{{ t('loginFirst') }}</p>
-          <button class="btn-primary" @click="showLoginModal = true">{{ t('login') }}</button>
+          <button class="btn-primary" @click="activeSection = 'login'">{{ t('login') }}</button>
         </div>
 
         <!-- My Content -->
         <div v-else>
+          <!-- My Stats -->
+          <div class="profile-stats">
+            <div class="pstat">
+              <span class="pstat-num">{{ myStats.posts_count }}</span>
+              <span class="pstat-label">{{ t('posts') }}</span>
+            </div>
+            <div class="pstat-divider"></div>
+            <div class="pstat">
+              <span class="pstat-num">{{ myStats.followers_count }}</span>
+              <span class="pstat-label">{{ t('followers') }}</span>
+            </div>
+            <div class="pstat-divider"></div>
+            <div class="pstat">
+              <span class="pstat-num">{{ myStats.following_count }}</span>
+              <span class="pstat-label">{{ t('following') }}</span>
+            </div>
+          </div>
           <!-- Tabs -->
           <div class="profile-tabs">
             <button :class="['ptab', { active: profileTab === 'photos' }]" @click="profileTab = 'photos'">{{ t('gallery') }}</button>
@@ -379,17 +505,13 @@
               </div>
               <p class="ppm-caption">{{ profilePhotoModal.caption }}</p>
               <div class="ppm-stats">
-                <span>⭐ {{ profilePhotoModal.likes || 0 }}</span>
-                <span>💬 {{ profilePhotoModal.comments_count || 0 }}</span>
+                <span>❤️ {{ profilePhotoModal.likes || 0 }}</span>
+                <span><svg style="width:14px;height:14px;vertical-align:-2px" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z" stroke-linecap="round" stroke-linejoin="round"/></svg> {{ profilePhotoModal.comments_count || 0 }}</span>
                 <span>{{ profilePhotoModal.created_at }}</span>
               </div>
               <div class="ppm-actions" v-if="isPhotoOwner(profilePhotoModal)">
-                <button class="ppm-btn" @click="togglePhotoPrivate(profilePhotoModal)">
-                  {{ profilePhotoModal.is_private ? '🔓' : '🔒' }}
-                </button>
-                <button class="ppm-btn ppm-delete" @click="handleDeletePhoto(profilePhotoModal.id); profilePhotoModal = null">
-                  🗑️
-                </button>
+                <button class="ppm-btn" @click="togglePhotoPrivate(profilePhotoModal)"><span class="icon-line" v-html="profilePhotoModal.is_private ? icons.lock : icons.unlock"></span></button>
+                <button class="ppm-btn ppm-delete" @click="handleDeletePhoto(profilePhotoModal.id); profilePhotoModal = null"><span class="icon-line icon-delete" v-html="icons.trash"></span></button>
               </div>
             </div>
           </div>
@@ -401,8 +523,7 @@
         <div class="section-head">
           <h2 class="section-title">{{ t('guestbook') }}</h2>
           <div class="section-head-actions">
-            <input v-model="msgSearch" type="text" :placeholder="t('searchPlaceholder')" class="inline-search" />
-            <span class="msg-badge">{{ filteredMessages.length }}</span>
+            <span class="msg-badge">{{ messages.length }}</span>
           </div>
         </div>
 
@@ -412,11 +533,6 @@
             <div v-else class="form-input" style="background:var(--accent-light);border-color:var(--accent-soft);display:flex;align-items:center;padding-left:12px;gap:6px">
               <span style="font-size:14px">👤</span>
               <span style="font-size:13px;color:var(--text)">{{ currentUser.nickname || currentUser.username }}</span>
-            </div>
-            <div class="mood-selector">
-              <button v-for="m in moods" :key="m.value"
-                :class="['mood-btn', { active: msgMood === m.value }]"
-                @click="msgMood = m.value" :title="t(m.key)">{{ m.icon }}</button>
             </div>
           </div>
           <textarea v-model="msgContent" :placeholder="t('writeMsg')" class="form-textarea" rows="3"></textarea>
@@ -430,24 +546,22 @@
           </div>
         </div>
 
-        <div class="msg-list" v-if="filteredMessages.length">
-          <div v-for="msg in filteredMessages" :key="msg.id" class="msg-card" :class="{ 'msg-private': msg.is_private }">
+        <div class="msg-list" v-if="messages.length">
+          <div v-for="msg in messages" :key="msg.id" class="msg-card" :class="{ 'msg-private': msg.is_private }">
             <div class="msg-avatar" :style="msg.author_avatar ? `background-image: url('${UPLOAD_BASE}${msg.author_avatar}'); background-size: cover; background-position: center;` : ''" :class="{ 'no-avatar-text': msg.author_avatar }">
               <span v-if="!msg.author_avatar">{{ msg.nickname.charAt(0) }}</span>
             </div>
             <div class="msg-body">
               <div class="msg-meta">
                 <span class="msg-name">{{ msg.nickname }}</span>
-                <span v-if="isMsgOwner(msg)" class="msg-private-badge">{{ msg.is_private ? '🔒' : '🔓' }}</span>
-                <span v-else-if="msg.is_private" class="msg-private-badge">🔒</span>
+                <span v-if="isMsgOwner(msg)" class="msg-private-badge"><span class="icon-line icon-sm" v-html="msg.is_private ? icons.lock : icons.unlock"></span></span>
+                <span v-else-if="msg.is_private" class="msg-private-badge"><span class="icon-line icon-sm" v-html="icons.lock"></span></span>
                 <span class="msg-time">{{ formatTimeAgo(msg.created_at) }}</span>
-                <div v-if="isMsgOwner(msg)" class="msg-actions-menu">
-                  <button class="msg-action-btn" @click="startEditMsg(msg)" title="edit">✏️</button>
-                  <button class="msg-action-btn" @click="toggleMsgPrivate(msg)" :title="msg.is_private ? t('setPublic') : t('setPrivate')">
-                    {{ msg.is_private ? '🔒' : '🔓' }}
-                  </button>
-                  <button class="msg-action-btn" @click="handleDeleteMsg(msg.id)" title="delete">🗑️</button>
-                </div>
+              <div v-if="isMsgOwner(msg)" class="msg-actions-menu">
+                <button class="msg-action-btn" @click="startEditMsg(msg)" :title="t('editMsg')"><span class="icon-line" v-html="icons.edit"></span></button>
+                <button class="msg-action-btn" @click="toggleMsgPrivate(msg)" :title="msg.is_private ? t('setPublic') : t('setPrivate')"><span class="icon-line" v-html="msg.is_private ? icons.lock : icons.unlock"></span></button>
+                <button class="msg-action-btn" @click="handleDeleteMsg(msg.id)" :title="t('deleteMsg')"><span class="icon-line icon-delete" v-html="icons.trash"></span></button>
+              </div>
               </div>
               <!-- Edit mode -->
               <div v-if="editingMsgId === msg.id" class="msg-edit-wrap">
@@ -459,7 +573,8 @@
               </div>
               <p v-else class="msg-text">{{ msg.content }}</p>
               <button class="msg-like-btn" @click="toggleMsgLike(msg)">
-                {{ msgLikedSet.has(msg.id) ? '⭐' : '☆' }} {{ msg.likes || 0 }}
+                <svg class="heart-icon-sm" :class="{ filled: msgLikedSet.has(msg.id) }" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+                {{ msg.likes || 0 }}
               </button>
             </div>
           </div>
@@ -467,6 +582,31 @@
         <div v-else class="empty-state">
           <span class="empty-icon">📝</span>
           <p>{{ t('noMessages') }}</p>
+        </div>
+      </section>
+
+      <!-- ===== SETTINGS ===== -->
+      <section v-if="activeSection === 'settings'" class="section">
+        <div class="section-head">
+          <h2 class="section-title">{{ t('settings') }}</h2>
+        </div>
+        <div class="settings-list">
+          <div class="settings-item">
+            <span class="settings-label">{{ t('settingsLang') }}</span>
+            <div class="lang-switcher">
+              <button v-for="lang in languages" :key="lang.code"
+                :class="['lang-btn', { active: currentLang === lang.code }]"
+                @click="currentLang = lang.code">{{ lang.label }}</button>
+            </div>
+          </div>
+          <div class="settings-item">
+            <span class="settings-label">{{ t('darkMode') }}</span>
+            <label class="toggle-switch">
+              <input type="checkbox" v-model="darkMode" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <button v-if="currentUser" class="settings-logout" @click="logout">{{ t('logout') }}</button>
         </div>
       </section>
 
@@ -495,14 +635,14 @@
     <!-- Story Viewer -->
     <transition name="fade">
       <div v-if="showStoryViewer" class="story-viewer" @click="showStoryViewer = false">
-        <div class="sv-bar" @click.stop>
+        <div class="sv-bar">
           <div class="sv-progress"></div>
         </div>
-        <div class="sv-content" @click.stop>
+        <div class="sv-content">
           <div class="sv-emoji">{{ viewingStory.icon }}</div>
           <p class="sv-text">{{ viewingStory.content }}</p>
         </div>
-        <div class="sv-user" @click.stop>
+        <div class="sv-user">
           <span class="sv-name">{{ viewingStory.name }}</span>
         </div>
       </div>
@@ -513,25 +653,11 @@
       <p>Made with care · {{ t('footer') }}</p>
     </footer>
 
-    <!-- Login Required Popup -->
-    <transition name="fade">
-      <div v-if="showLoginRequiredPopup" class="modal-overlay" @click.self="onLoginRequiredCancel">
-        <div class="confirm-box">
-          <div class="confirm-icon">🔒</div>
-          <p class="confirm-text">{{ t('loginRequiredPopup') }}</p>
-          <div class="confirm-actions">
-            <button class="btn-cancel" @click="onLoginRequiredCancel">{{ t('cancel') }}</button>
-            <button class="btn-confirm" @click="onLoginRequiredConfirm">{{ t('ok') }}</button>
-          </div>
-        </div>
-      </div>
-    </transition>
-
     <!-- Confirm Dialog -->
     <transition name="fade">
       <div v-if="confirmDialog.show" class="modal-overlay" @click.self="confirmDialog.onCancel">
         <div class="confirm-box">
-          <div class="confirm-icon">{{ confirmDialog.icon || '⚠️' }}</div>
+          <div class="confirm-icon"><span class="icon-line icon-confirm" v-html="confirmDialog.icon || icons.warn"></span></div>
           <p class="confirm-text">{{ confirmDialog.message }}</p>
           <div class="confirm-actions">
             <button class="btn-cancel" @click="confirmDialog.onCancel">{{ t('cancel') }}</button>
@@ -549,11 +675,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import * as api from './api.js'
 
 // ============ i18n ============
 const currentLang = ref('ko')
+const darkMode = ref(localStorage.getItem('diary_dark') === '1')
 const languages = [
   { code: 'ko', label: '한국어' },
   { code: 'zh', label: '中文' },
@@ -572,6 +699,8 @@ const i18n = {
     cancel: '취소', uploading: '...', post: '게시',
     noPhotos: '아직 사진이 없어요\n첫 사진을 올려보세요!',
     noComments: '아직 댓글이 없어요',
+    searchUser: '사용자 검색...', noSearchResult: '검색 결과가 없어요', searchAll: '사용자, 게시물, 방명록 검색...', users: '사용자',
+    follow: '팔로우', following: '팔로잉', followers: '팔로워', posts: '게시물', followDone: '팔로우 완료 ✨', unfollowDone: '팔로우 취소',
     guestbook: '방명록', comments: '댓글',
     yourName: '이름', writeMsg: '하고 싶은 말을 적어보세요...',
     send: '보내기', addComment: '댓글 달기...',
@@ -598,7 +727,7 @@ const i18n = {
     loginOk: '환영해요 ✨', registerOk: '가입 완료 ✨', authFail: '다시 시도해주세요',
     loginRequiredPopup: '로그인이 필요한 페이지입니다. 로그인 하시겠습니까?',
     ok: '확인',
-    profile: '프로필', changeAvatar: '사진 변경', changeNickname: '별명 변경', phone: '전화번호', email: '이메일', changePwd: '비밀번호 변경', oldPwd: '현재 비밀번호', newPwd: '새 비밀번호', pwdChanged: '비밀번호 변경 완료 ✨', profileSaved: '저장 완료 ✨', loginFirst: '로그인 후 이용해주세요',
+    profile: '프로필', settings: '설정', changeAvatar: '사진 변경', changePhoto: '이미지 변경', changeNickname: '별명 변경', phone: '전화번호', email: '이메일', changePwd: '비밀번호 변경', oldPwd: '현재 비밀번호', newPwd: '새 비밀번호', pwdChanged: '비밀번호 변경 완료 ✨', profileSaved: '저장 완료 ✨', loginFirst: '로그인 후 이용해주세요', settingsLang: '언어', darkMode: '다크 모드',
     timeJustNow: '방금', timeMin: '분', timeHour: '시간', timeDay: '일',
     story1: '어느 날 ☀️', story2: '기록 🌙', story3: '앞으로 🌸',
     story1Content: '기분 좋은 하루였어\n바람이 좋았어 🌿',
@@ -615,6 +744,8 @@ const i18n = {
     cancel: 'Cancel', uploading: '...', post: 'Post',
     noPhotos: 'No photos yet\nUpload the first one!',
     noComments: 'No comments yet',
+    searchUser: 'Search users...', noSearchResult: 'No results found', searchAll: 'Search users, posts, messages...', users: 'Users',
+    follow: 'Follow', following: 'Following', followers: 'Followers', posts: 'Posts', followDone: 'Followed ✨', unfollowDone: 'Unfollowed',
     guestbook: 'Guestbook', comments: 'Comments',
     yourName: 'Name', writeMsg: 'Write something...',
     send: 'Send', addComment: 'Add a comment...',
@@ -641,7 +772,7 @@ const i18n = {
     loginOk: 'Welcome ✨', registerOk: 'Signed up ✨', authFail: 'Please try again',
     loginRequiredPopup: 'Login is required for this page. Would you like to login?',
     ok: 'OK',
-    profile: 'Profile', changeAvatar: 'Change Photo', changeNickname: 'Change Nickname', phone: 'Phone', email: 'Email', changePwd: 'Change Password', oldPwd: 'Current Password', newPwd: 'New Password', pwdChanged: 'Password changed ✨', profileSaved: 'Saved ✨', loginFirst: 'Please login first',
+    profile: 'Profile', settings: 'Settings', changeAvatar: 'Change Photo', changePhoto: 'Change Image', changeNickname: 'Change Nickname', phone: 'Phone', email: 'Email', changePwd: 'Change Password', oldPwd: 'Current Password', newPwd: 'New Password', pwdChanged: 'Password changed ✨', profileSaved: 'Saved ✨', loginFirst: 'Please login first', settingsLang: 'Language', darkMode: 'Dark Mode',
     timeJustNow: 'now', timeMin: 'm', timeHour: 'h', timeDay: 'd',
     story1: 'A Day ☀️', story2: 'Memories 🌙', story3: 'Ahead 🌸',
     story1Content: 'A nice day\nthe breeze was gentle 🌿',
@@ -658,6 +789,8 @@ const i18n = {
     cancel: 'キャンセル', uploading: '...', post: '投稿',
     noPhotos: 'まだ写真がありません\n最初の写真を投稿しましょう！',
     noComments: 'まだコメントがありません',
+    searchUser: 'ユーザー検索...', noSearchResult: '検索結果がありません', searchAll: 'ユーザー、投稿、掲示板を検索...', users: 'ユーザー',
+    follow: 'フォロー', following: 'フォロー中', followers: 'フォロワー', posts: '投稿', followDone: 'フォローしました ✨', unfollowDone: 'フォロー解除',
     guestbook: '掲示板', comments: 'コメント',
     yourName: '名前', writeMsg: '書きたいことを書いて...',
     send: '送信', addComment: 'コメントする...',
@@ -684,7 +817,7 @@ const i18n = {
     loginOk: 'ようこそ ✨', registerOk: '登録完了 ✨', authFail: 'もう一度お試しください',
     loginRequiredPopup: 'このページをご利用いただくにはログインが必要です。ログインしますか？',
     ok: 'はい',
-    profile: 'プロフィール', changeAvatar: '写真変更', changeNickname: 'ニックネーム変更', phone: '電話番号', email: 'メール', changePwd: 'パスワード変更', oldPwd: '現在のパスワード', newPwd: '新しいパスワード', pwdChanged: 'パスワードを変更しました ✨', profileSaved: '保存しました ✨', loginFirst: 'ログインしてください',
+    profile: 'プロフィール', settings: '設定', changeAvatar: '写真変更', changePhoto: '画像変更', changeNickname: 'ニックネーム変更', phone: '電話番号', email: 'メール', changePwd: 'パスワード変更', oldPwd: '現在のパスワード', newPwd: '新しいパスワード', pwdChanged: 'パスワードを変更しました ✨', profileSaved: '保存しました ✨', loginFirst: 'ログインしてください', settingsLang: '言語', darkMode: 'ダークモード',
     timeJustNow: 'たった今', timeMin: '分', timeHour: '時間', timeDay: '日',
     story1: 'ある日 ☀️', story2: '記録 🌙', story3: 'これから 🌸',
     story1Content: '気分のいい一日だった\n風が気持ちよかったよ 🌿',
@@ -701,6 +834,8 @@ const i18n = {
     cancel: '取消', uploading: '...', post: '发布',
     noPhotos: '还没有照片\n发第一条动态吧！',
     noComments: '还没有评论',
+    searchUser: '搜索用户...', noSearchResult: '没有找到结果', searchAll: '搜索用户、动态、留言...', users: '用户',
+    follow: '关注', following: '已关注', followers: '粉丝', posts: '作品', followDone: '关注成功 ✨', unfollowDone: '已取消关注',
     guestbook: '留言板', comments: '评论',
     yourName: '你的名字', writeMsg: '写下你想说的话...',
     send: '发送', addComment: '添加评论...',
@@ -727,7 +862,7 @@ const i18n = {
     loginOk: '欢迎 ✨', registerOk: '注册成功 ✨', authFail: '请重试',
     loginRequiredPopup: '该页面需要登录才能访问。是否立即登录？',
     ok: '确定',
-    profile: '个人主页', changeAvatar: '更换头像', changeNickname: '修改昵称', phone: '手机号', email: '邮箱', changePwd: '修改密码', oldPwd: '当前密码', newPwd: '新密码', pwdChanged: '密码修改成功 ✨', profileSaved: '保存成功 ✨', loginFirst: '请先登录',
+    profile: '个人主页', settings: '设置', changeAvatar: '更换头像', changePhoto: '更换图片', changeNickname: '修改昵称', phone: '手机号', email: '邮箱', changePwd: '修改密码', oldPwd: '当前密码', newPwd: '新密码', pwdChanged: '密码修改成功 ✨', profileSaved: '保存成功 ✨', loginFirst: '请先登录', settingsLang: '语言', darkMode: '深色模式',
     timeJustNow: '刚刚', timeMin: '分钟', timeHour: '小时', timeDay: '天',
     story1: '某一天 ☀️', story2: '记录 🌙', story3: '以后 🌸',
     story1Content: '心情不错的一天\n风很舒服 🌿',
@@ -747,6 +882,7 @@ const activeSection = ref('home')
 const photos = ref([])
 const messages = ref([])
 const stats = reactive({ photos: 0, messages: 0, total_likes: 0 })
+const myStats = reactive({ posts_count: 0, following_count: 0, followers_count: 0 })
 const tapHeart = ref(null)
 const photoLikedSet = reactive(new Set())
 const msgLikedSet = reactive(new Set())
@@ -754,7 +890,6 @@ const userHash = ref(localStorage.getItem('love_user_hash') || 'user_' + Math.ra
 
 // Auth
 const currentUser = ref(null)
-const showLoginModal = ref(false)
 const showUserMenu = ref(false)
 const loginMode = ref('login')
 const authUsername = ref('')
@@ -779,8 +914,8 @@ const profilePhotoModal = ref(null)
 const myPhotos = ref([])
 const myMessages = ref([])
 
-// Login requirement popup
-const showLoginRequiredPopup = ref(false)
+// Login requirement
+const pendingSection = ref(null)
 
 // Message edit/delete/private
 const editingMsgId = ref(null)
@@ -791,6 +926,7 @@ const msgIsPrivate = ref(false)
 const uploadIsPrivate = ref(false)
 const editingPhotoId = ref(null)
 const editingPhotoCaption = ref('')
+const editingPhotoFile = ref(null)
 
 // Upload
 const showUploadModal = ref(false)
@@ -825,6 +961,124 @@ const konamiCode = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','Arr
 const konamiIndex = ref(0)
 
 // Toast
+
+// Search
+const showSearchPanel = ref(false)
+const searchQuery = ref('')
+const searchTab = ref('users')
+const searchResults = ref([])
+const searchPhotoResults = ref([])
+const searchMsgResults = ref([])
+const searchLoading = ref(false)
+const searchInput = ref(null)
+const viewingUser = ref(null)
+const userPhotos = ref([])
+const userFollowStatus = ref({ is_following: false, following_count: 0, followers_count: 0, posts_count: 0 })
+
+// Header inline search
+const headerSearchVal = ref('')
+const headerSearchFocused = ref(false)
+let headerSearchTimer = null
+
+function onHeaderSearchFocus() {
+  headerSearchFocused.value = true
+  if (headerSearchVal.value.trim()) {
+    showSearchPanel.value = true
+    searchQuery.value = headerSearchVal.value
+    viewUserProfile(null)
+    doSearch(headerSearchVal.value.trim())
+  }
+}
+function onHeaderSearchBlur() {
+  setTimeout(() => { headerSearchFocused.value = false }, 200)
+}
+function onHeaderSearchInput() {
+  const q = headerSearchVal.value.trim()
+  if (q) {
+    showSearchPanel.value = true
+    searchQuery.value = q
+    viewingUser.value = null
+    clearTimeout(headerSearchTimer)
+    headerSearchTimer = setTimeout(() => doSearch(q), 300)
+  }
+}
+
+// Search all types
+let searchTimer = null
+async function doSearch(q) {
+  searchLoading.value = true
+  searchPhotoResults.value = []
+  searchMsgResults.value = []
+  try {
+    const token = api.getToken()
+    const [usersRes, photosRes, msgsRes] = await Promise.all([
+      api.searchUsers(q),
+      api.searchPhotos(q, token),
+      api.searchMessages(q, token),
+    ])
+    if (usersRes.data.code === 200) searchResults.value = usersRes.data.data
+    if (photosRes.data.code === 200) searchPhotoResults.value = photosRes.data.data
+    if (msgsRes.data.code === 200) searchMsgResults.value = msgsRes.data.data
+    // Auto-switch to tab with results
+    if (searchResults.value.length) searchTab.value = 'users'
+    else if (searchPhotoResults.value.length) searchTab.value = 'posts'
+    else if (searchMsgResults.value.length) searchTab.value = 'messages'
+  } catch (e) {
+    searchResults.value = []
+    searchPhotoResults.value = []
+    searchMsgResults.value = []
+  } finally {
+    searchLoading.value = false
+  }
+}
+async function onUserSearch() {
+  clearTimeout(searchTimer)
+  if (!searchQuery.value.trim()) {
+    searchResults.value = []
+    searchPhotoResults.value = []
+    searchMsgResults.value = []
+    return
+  }
+  headerSearchVal.value = searchQuery.value
+  searchTimer = setTimeout(() => doSearch(searchQuery.value.trim()), 300)
+}
+
+async function viewUserProfile(user) {
+  viewingUser.value = user
+  userPhotos.value = []
+  userFollowStatus.value = { is_following: false, following_count: 0, followers_count: 0, posts_count: 0 }
+  const token = api.getToken()
+  try {
+    const [photosRes, followRes] = await Promise.all([
+      api.getUserPhotos(user.id, token),
+      api.getFollowStatus(user.id, token),
+    ])
+    if (photosRes.data.code === 200) userPhotos.value = photosRes.data.data
+    if (followRes.data.code === 200) userFollowStatus.value = followRes.data.data
+  } catch (e) {}
+}
+
+async function toggleFollow() {
+  if (!viewingUser.value) return
+  const token = api.getToken()
+  if (!token) {
+    showToast(t('loginFirst'), 'info')
+    return
+  }
+  try {
+    const res = await api.followUser(viewingUser.value.id, token)
+    if (res.data.code === 200) {
+      userFollowStatus.value.is_following = res.data.followed
+      if (res.data.followed) {
+        userFollowStatus.value.followers_count += 1
+        showToast(t('followDone'))
+      } else {
+        userFollowStatus.value.followers_count -= 1
+        showToast(t('unfollowDone'))
+      }
+    }
+  } catch (e) {}
+}
 const toast = reactive({ show: false, message: '', type: 'success' })
 
 // Confirm dialog
@@ -859,11 +1113,21 @@ const stories = ref([
 
 // Nav
 const navItems = [
-  { id: 'home', icon: '🏠' },
-  { id: 'profile', icon: '👤' },
-  { id: 'gallery', icon: '📷' },
-  { id: 'messages', icon: '💬' },
+  { id: 'home', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>` },
+  { id: 'gallery', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>` },
+  { id: 'messages', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/></svg>` },
+  { id: 'profile', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>` },
+  { id: 'settings', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>` },
 ]
+
+// Line icons
+const icons = {
+  edit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+  lock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>`,
+  unlock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg>`,
+  trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`,
+  warn: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+}
 
 // Moods
 const moods = [
@@ -874,26 +1138,6 @@ const moods = [
   { value: 'star', icon: '⭐', key: 'mood_star' },
 ]
 
-// Computed
-const gallerySearch = ref('')
-const filteredPhotos = computed(() => {
-  const q = gallerySearch.value.trim().toLowerCase()
-  if (!q) return photos.value
-  return photos.value.filter(p =>
-    (p.caption && p.caption.toLowerCase().includes(q)) ||
-    (p.location && p.location.toLowerCase().includes(q)) ||
-    (p.author_name && p.author_name.toLowerCase().includes(q))
-  )
-})
-const msgSearch = ref('')
-const filteredMessages = computed(() => {
-  const q = msgSearch.value.trim().toLowerCase()
-  if (!q) return messages.value
-  return messages.value.filter(m =>
-    (m.content && m.content.toLowerCase().includes(q)) ||
-    (m.nickname && m.nickname.toLowerCase().includes(q))
-  )
-})
 
 // ============ Auth Functions ============
 
@@ -916,11 +1160,13 @@ async function handleAuth() {
         currentUser.value = res.data.user
         initProfileEdit()
         showToast(t('registerOk'))
-        showLoginModal.value = false
         authUsername.value = ''
         authPassword.value = ''
         authNickname.value = ''
         fetchData()
+        fetchMyContent()
+        activeSection.value = pendingSection.value || 'home'
+        pendingSection.value = null
       } else {
         authError.value = res.data.detail || t('authFail')
       }
@@ -931,10 +1177,12 @@ async function handleAuth() {
         currentUser.value = res.data.user
         initProfileEdit()
         showToast(t('loginOk'))
-        showLoginModal.value = false
         authUsername.value = ''
         authPassword.value = ''
         fetchData()
+        fetchMyContent()
+        activeSection.value = pendingSection.value || 'home'
+        pendingSection.value = null
       } else {
         authError.value = res.data.detail || t('authFail')
       }
@@ -957,6 +1205,7 @@ function logout() {
   newPassword.value = ''
   showToast(t('logout'))
   fetchData()
+  activeSection.value = 'login'
 }
 
 function initProfileEdit() {
@@ -986,35 +1235,16 @@ async function checkAuth() {
 
 // Handle navigation with login check
 function navigateTo(section) {
-  // Define which sections require login
-  const restrictedSections = ['gallery', 'messages']
-  
-  // Check if the section requires login and user is not logged in
-  if (restrictedSections.includes(section) && !currentUser.value) {
-    // Show login required popup first
-    showLoginRequiredPopup.value = true
+  // If not logged in, only allow login section
+  if (!currentUser.value && section !== 'login') {
+    pendingSection.value = section
+    activeSection.value = 'login'
     return false
   }
   
   // If allowed, change the active section
   activeSection.value = section
   return true
-}
-
-// Handle login required popup confirmation
-function onLoginRequiredConfirm() {
-  showLoginRequiredPopup.value = false
-  // After user confirms, show login modal
-  setTimeout(() => {
-    showLoginModal.value = true
-  }, 300)
-}
-
-// Handle login required popup cancel
-function onLoginRequiredCancel() {
-  showLoginRequiredPopup.value = false
-  // Keep user on home page
-  activeSection.value = 'home'
 }
 
 function isMsgOwner(msg) {
@@ -1036,6 +1266,7 @@ function isCommentOwner(comment) {
 function startEditPhoto(photo) {
   editingPhotoId.value = photo.id
   editingPhotoCaption.value = photo.caption || ''
+  editingPhotoFile.value = null
 }
 
 async function confirmEditPhoto(photoId) {
@@ -1045,10 +1276,12 @@ async function confirmEditPhoto(photoId) {
     const fd = new FormData()
     fd.append('caption', editingPhotoCaption.value)
     fd.append('token', token)
+    if (editingPhotoFile.value) fd.append('file', editingPhotoFile.value)
     const res = await api.updatePhoto(photoId, fd)
     if (res.data.code === 200) {
       showToast(t('save'))
       editingPhotoId.value = null
+      editingPhotoFile.value = null
       fetchPhotos()
     }
   } catch (e) {
@@ -1374,6 +1607,8 @@ async function handleAvatarUpload(e) {
     const res = await api.uploadAvatar(fd)
     if (res.data.code === 200) {
       currentUser.value = { ...currentUser.value, avatar: res.data.filename }
+      fetchData()
+      fetchMyContent()
       showToast('✓')
     }
   } catch (e) {
@@ -1560,6 +1795,19 @@ async function fetchMessages() {
   fetchMyContent()
 }
 
+async function fetchMyStats() {
+  if (!currentUser.value) return
+  try {
+    const token = api.getToken()
+    const res = await api.getFollowStatus(currentUser.value.id, token)
+    if (res.data.code === 200) {
+      myStats.posts_count = res.data.data.posts_count
+      myStats.following_count = res.data.data.following_count
+      myStats.followers_count = res.data.data.followers_count
+    }
+  } catch (e) {}
+}
+
 async function fetchStats() {
   try {
     const res = await api.getStats()
@@ -1571,6 +1819,7 @@ function fetchData() {
   fetchPhotos()
   fetchMessages()
   fetchStats()
+  fetchMyStats()
 }
 
 async function fetchMyContent() {
@@ -1587,6 +1836,13 @@ async function fetchMyContent() {
 }
 
 // ============ Lifecycle ============
+watch(showSearchPanel, (v) => {
+  if (v) nextTick(() => searchInput.value?.focus())
+})
+watch(darkMode, (v) => {
+  localStorage.setItem('diary_dark', v ? '1' : '0')
+})
+
 onMounted(() => {
   localStorage.setItem('love_user_hash', userHash.value)
   checkAuth().then(() => { fetchData(); fetchMyContent() })
@@ -1606,14 +1862,14 @@ onUnmounted(() => {
 /* ============ RESET ============ */
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
-  --bg:#fafafa;--bg-card:#ffffff;--text:#262626;--text-light:#8e8e8e;
-  --accent:#0095f6;--accent-light:#e8f5fd;--accent-soft:#d4edfc;
-  --accent-deep:#0081d6;--gradient-soft:linear-gradient(135deg, #f5f5f5 0%, #eeeeee 50%, #f0f0f0 100%);
-  --gradient-accent:linear-gradient(135deg, #0095f6, #00b4d8);
-  --border:#dbdbdb;--border-light:#efefef;
-  --shadow:0 1px 8px rgba(0,0,0,0.08);
-  --shadow-md:0 2px 16px rgba(0,0,0,0.1);
-  --shadow-lg:0 8px 40px rgba(0,0,0,0.15);
+  --bg:#f2f2f2;--bg-card:#ffffff;--text:#2a2a2a;--text-light:#999;
+  --accent:#5a5a5a;--accent-light:#f5f5f5;--accent-soft:#eaeaea;
+  --accent-deep:#3a3a3a;--gradient-soft:linear-gradient(135deg, #f5f5f5 0%, #eeeeee 50%, #f0f0f0 100%);
+  --gradient-accent:linear-gradient(135deg, #888, #bbb);
+  --border:#e0e0e0;--border-light:#ededed;
+  --shadow:0 1px 6px rgba(0,0,0,0.04);
+  --shadow-md:0 2px 12px rgba(0,0,0,0.06);
+  --shadow-lg:0 6px 30px rgba(0,0,0,0.08);
   --radius:12px;--radius-sm:8px;--radius-lg:16px;
   --transition:0.2s cubic-bezier(0.4,0,0.2,1);
 }
@@ -1621,10 +1877,10 @@ html{scroll-behavior:smooth;-webkit-tap-highlight-color:transparent}
 body{
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',Roboto,sans-serif;
   background:var(--bg);color:var(--text);line-height:1.5;min-height:100vh;overflow-x:hidden;
-  transition:transform 0.3s ease;
+  transition:background 0.35s ease, color 0.35s ease;
   -webkit-font-smoothing:antialiased;
 }
-.app{max-width:480px;margin:0 auto;min-height:100vh;position:relative;background:var(--bg)}
+.app{max-width:480px;margin:0 auto;min-height:100vh;position:relative;background:var(--bg);transition:background 0.35s ease}
 
 /* ============ FLOATING PARTICLES ============ */
 .petals{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
@@ -1640,13 +1896,14 @@ body{
 /* ============ HEADER ============ */
 .header{
   position:sticky;top:0;z-index:10;
-  background:rgba(250,250,250,0.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  background:rgba(242,242,242,0.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
   border-bottom:1px solid var(--border-light);
+  transition:background 0.35s ease, border-color 0.35s ease;
 }
 .header-inner{display:flex;align-items:center;justify-content:space-between;padding:12px 16px}
 .logo{display:flex;align-items:center;cursor:pointer;user-select:none;transition:transform 0.2s ease}
 .logo:hover{transform:scale(1.02)}
-.logo-img{height:28px;width:auto}
+.logo-text{font-size:22px;font-weight:300;letter-spacing:-0.5px;color:var(--text)}
 .header-actions{display:flex;align-items:center;gap:12px}
 
 /* Login trigger */
@@ -1659,8 +1916,9 @@ body{
 }
 .login-icon:hover{background:#e8e8e8}
 .login-icon.logged{
-  background:var(--accent);color:#fff;font-weight:600;font-size:12px;
-  box-shadow:0 2px 8px rgba(0,149,246,0.3);
+  background:var(--bg-card);color:var(--text);font-weight:600;font-size:12px;
+  border:1px solid var(--border);
+  box-shadow:var(--shadow);
 }
 .user-menu{position:relative}
 
@@ -1681,7 +1939,15 @@ body{
 .ud-item:hover{background:var(--bg)}
 .ud-logout{color:#ed4956;border-top:1px solid var(--border-light);margin-top:4px;padding-top:12px}
 
-/* Login modal */
+/* Login page */
+.login-page{display:flex;flex-direction:column;align-items:center;padding:60px 24px 40px;min-height:70vh;justify-content:center}
+.lp-logo{margin-bottom:8px;cursor:pointer}
+.lp-subtitle{font-size:13px;color:var(--text-light);margin-bottom:36px;font-weight:300;letter-spacing:0.5px}
+.lp-form{width:100%;max-width:340px}
+.lp-form .modal-input{margin-bottom:12px}
+.lp-form .submit-btn{width:100%}
+
+/* Login modal (kept for upload modal etc.) */
 .login-modal{
   background:var(--bg-card);border-radius:var(--radius-lg);padding:28px 24px;width:100%;max-width:360px;
   box-shadow:var(--shadow-lg);border:none;
@@ -1704,7 +1970,82 @@ body{
   font-size:11px;font-family:inherit;cursor:pointer;color:var(--text-light);
   transition:var(--transition);white-space:nowrap;font-weight:500;
 }
-.lang-btn.active{background:var(--accent);color:#fff}
+.lang-btn.active{background:var(--bg-card);color:var(--text);border:1px solid var(--border);font-weight:600}
+
+/* ============ HEADER SEARCH ============ */
+.header-search{display:flex;align-items:center;gap:6px;background:var(--bg);border-radius:10px;padding:6px 10px;border:1px solid transparent;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);width:36px;height:36px;overflow:hidden}
+.header-search:hover,.header-search.focused,.header-search:focus-within{width:180px;border-color:var(--border);box-shadow:0 0 0 2px var(--border-light)}
+.hs-icon{width:18px;height:18px;flex-shrink:0;color:var(--text-light)}
+.hs-input{border:none;background:transparent;outline:none;font-size:13px;color:var(--text);width:100%;line-height:1.4}
+.hs-input::placeholder{color:var(--text-light);font-size:12px}
+
+/* Line icons */
+.icon-line{display:inline-flex;width:18px;height:18px;align-items:center;justify-content:center;color:var(--text)}
+.icon-line svg{width:18px;height:18px}
+.icon-line.icon-sm svg{width:13px;height:13px}
+.icon-line.icon-delete svg{color:#ed4956}
+.icon-line.icon-confirm svg{width:28px;height:28px}
+
+/* ============ SEARCH PANEL ============ */
+.search-overlay{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.4);display:flex;align-items:flex-start;justify-content:center;padding-top:0}
+.search-panel{width:100%;max-width:480px;background:var(--bg);height:100vh;display:flex;flex-direction:column;animation:searchSlideIn 0.3s ease}
+@keyframes searchSlideIn{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+.search-panel-header{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border-light);background:var(--bg-card)}
+.sp-close{border:none;background:transparent;font-size:22px;cursor:pointer;color:var(--text);padding:4px 6px;border-radius:8px;transition:all 0.15s;line-height:1}
+.sp-close:hover{background:var(--bg)}
+.sp-input-wrap{flex:1}
+.sp-input{width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:10px;font-size:14px;font-family:inherit;background:var(--bg);color:var(--text);outline:none;transition:all 0.15s}
+.sp-input:focus{border-color:var(--text)}
+.sp-input::placeholder{color:var(--text-light)}
+.sp-tabs{display:flex;gap:0;border-bottom:1px solid var(--border-light);background:var(--bg-card)}
+.sp-tab{flex:1;padding:10px 0;border:none;background:transparent;font-size:13px;font-weight:500;color:var(--text-light);cursor:pointer;transition:all 0.2s;position:relative;display:flex;align-items:center;justify-content:center;gap:4px}
+.sp-tab.active{color:var(--text);font-weight:600}
+.sp-tab.active::after{content:'';position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:24px;height:2px;background:var(--text);border-radius:1px}
+.sp-tab-count{font-size:11px;background:var(--bg);padding:1px 6px;border-radius:10px;color:var(--text-light)}
+.sp-results{flex:1;overflow-y:auto;padding:8px 0}
+.sp-user-item{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;transition:background 0.15s}
+.sp-user-item:hover{background:var(--border-light)}
+.sp-user-item:active{background:var(--accent-light)}
+.sp-user-avatar{width:40px;height:40px;border-radius:50%;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--text-light);flex-shrink:0;background-size:cover;background-position:center}
+.sp-user-avatar.no-avatar-text span{display:none}
+.sp-user-info{display:flex;flex-direction:column;gap:1px}
+.sp-user-name{font-size:14px;font-weight:600;color:var(--text)}
+.sp-user-username{font-size:12px;color:var(--text-light)}
+.sp-photo-item{display:flex;align-items:center;gap:12px;padding:10px 16px;cursor:pointer;transition:background 0.15s}
+.sp-photo-item:hover{background:var(--border-light)}
+.sp-photo-thumb{width:48px;height:48px;border-radius:8px;overflow:hidden;flex-shrink:0}
+.sp-photo-thumb img{width:100%;height:100%;object-fit:cover}
+.sp-photo-info{flex:1;min-width:0}
+.sp-photo-caption{font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+.sp-photo-author{font-size:12px;color:var(--text-light)}
+.sp-msg-item{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;cursor:pointer;transition:background 0.15s}
+.sp-msg-item:hover{background:var(--border-light)}
+.sp-msg-avatar{width:36px;height:36px;border-radius:50%;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--text-light);flex-shrink:0;background-size:cover;background-position:center}
+.sp-msg-avatar.no-avatar-text span{display:none}
+.sp-msg-info{flex:1;min-width:0}
+.sp-msg-name{font-size:13px;font-weight:600;color:var(--text)}
+.sp-msg-content{font-size:13px;color:var(--text-light);margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sp-empty{text-align:center;padding:60px 20px;color:var(--text-light);font-size:14px}
+.sp-user-profile{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+.sp-up-header{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border-light);cursor:pointer;background:var(--bg-card)}
+.sp-up-back{font-size:18px;color:var(--text);padding:4px 6px;border-radius:8px;transition:all 0.15s}
+.sp-up-header:hover .sp-up-back{background:var(--bg)}
+.sp-up-title{font-size:15px;font-weight:600;color:var(--text)}
+.sp-up-info{display:flex;align-items:center;gap:14px;padding:20px 16px;flex-wrap:wrap}
+.sp-up-avatar{width:56px;height:56px;border-radius:50%;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--text-light);flex-shrink:0;background-size:cover;background-position:center}
+.sp-up-avatar.no-avatar-text span{display:none}
+.sp-up-meta{flex:1;min-width:0}
+.sp-up-meta h3{font-size:16px;font-weight:600;margin-bottom:2px}
+.sp-up-meta p{font-size:13px;color:var(--text-light)}
+.sp-up-follow{padding:6px 18px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px solid var(--text);background:var(--bg-card);color:var(--text);transition:all 0.2s}
+.sp-up-follow.following{background:var(--bg);color:var(--text-light);border-color:var(--border)}
+.sp-up-follow:active{transform:scale(0.96)}
+.sp-up-stats{display:flex;gap:0;padding:0 16px 16px;border-bottom:1px solid var(--border-light)}
+.sp-up-stat{flex:1;text-align:center;padding:10px 0}
+.sp-up-stat-num{display:block;font-size:16px;font-weight:600;color:var(--text)}
+.sp-up-stat-label{font-size:12px;color:var(--text-light)}
+.sp-up-photos{padding:0 2px}
+.sp-up-empty{text-align:center;padding:40px 20px;color:var(--text-light);font-size:14px}
 
 /* ============ BOTTOM NAV ============ */
 .bottom-nav{
@@ -1713,22 +2054,24 @@ body{
   background:rgba(255,255,255,0.98);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
   border-top:1px solid var(--border-light);
   display:flex;justify-content:space-around;padding:8px 0 env(safe-area-inset-bottom,8px);
+  transition:background 0.35s ease, border-color 0.35s ease;
 }
 .bnav-btn{
   display:flex;flex-direction:column;align-items:center;gap:2px;
   padding:6px 16px;border:none;background:transparent;cursor:pointer;
-  color:var(--text-light);transition:all 0.15s ease;font-family:inherit;
+  color:var(--text-light);transition:all 0.3s cubic-bezier(0.4,0,0.2,1);font-family:inherit;
 }
 .bnav-btn:hover{opacity:0.7}
-.bnav-btn.active .bnav-icon{transform:scale(1)}
+.bnav-btn.active .bnav-icon svg{stroke-width:2.2}
 .bnav-btn.active .bnav-label{color:var(--text);font-weight:600}
-.bnav-icon{font-size:22px;transition:all 0.15s ease}
-.bnav-label{font-size:10px;letter-spacing:0.3px}
+.bnav-icon{width:24px;height:24px;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);display:flex;align-items:center;justify-content:center}
+.bnav-icon svg{width:22px;height:22px}
+.bnav-label{font-size:10px;letter-spacing:0.3px;transition:all 0.3s cubic-bezier(0.4,0,0.2,1)}
 
 /* ============ MAIN ============ */
 .main{padding:0 0 20px;position:relative;z-index:1}
-.section{animation:fadeIn 0.25s ease}
-@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.section{animation:fadeIn 0.4s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 
 /* ============ PROFILE HEADER ============ */
 .profile-header{display:flex;align-items:center;gap:16px;padding:20px 16px 16px}
@@ -1743,7 +2086,7 @@ body{
 .profile-avatar .avatar-edit-hint{
   position:absolute;bottom:0;right:0;
   width:22px;height:22px;border-radius:50%;
-  background:var(--accent);color:#fff;
+  background:var(--bg-card);color:var(--text-light);border:1px solid var(--border);
   font-size:11px;display:flex;align-items:center;justify-content:center;
   opacity:0;transition:opacity 0.2s;
 }
@@ -1764,6 +2107,7 @@ body{
   display:flex;align-items:center;justify-content:space-around;
   padding:14px 20px;margin:0 16px;
   background:transparent;
+  transition:background 0.35s ease, border-color 0.35s ease;
 }
 .pstat{text-align:center;cursor:pointer;transition:all 0.15s ease;padding:4px 8px}
 .pstat:active{opacity:0.6}
@@ -1828,6 +2172,7 @@ body{
 .feature-card{
   margin:0 16px 20px;padding:24px;
   background:var(--bg-card);
+  transition:background 0.35s ease, border-color 0.35s ease, transform 0.25s ease, box-shadow 0.25s ease;
   border-radius:var(--radius-lg);cursor:pointer;
   transition:all 0.2s ease;position:relative;overflow:hidden;
   border:1px solid var(--border-light);
@@ -1841,7 +2186,7 @@ body{
 .feature-text.accent{color:var(--text);font-weight:600;font-size:17px}
 .feature-dots{display:flex;gap:6px;margin-top:16px;justify-content:center}
 .dot{width:6px;height:6px;border-radius:50%;background:var(--border);transition:all 0.2s ease}
-.dot.active{background:var(--accent);width:18px;border-radius:3px}
+.dot.active{background:var(--accent);width:18px;border-radius:3px;opacity:0.7}
 
 /* ============ SECTION HEAD ============ */
 .section-head{display:flex;align-items:center;justify-content:space-between;padding:16px 16px 12px}
@@ -1855,8 +2200,9 @@ body{
 .inline-search::placeholder{color:var(--text-light)}
 .section-title{font-size:18px;font-weight:700;letter-spacing:-0.2px}
 .msg-badge{
-  background:var(--accent);color:#fff;font-size:12px;
+  background:var(--bg-card);color:var(--text-light);font-size:12px;
   padding:4px 10px;border-radius:10px;font-weight:600;
+  border:1px solid var(--border);
 }
 
 /* Upload */
@@ -1877,6 +2223,7 @@ body{
   margin:0 0 8px;
   border-radius:0;box-shadow:none;overflow:hidden;
   border-bottom:1px solid var(--border-light);
+  transition:background 0.35s ease, border-color 0.35s ease;
 }
 .post-card.post-private{border-left:none}
 .post-header{display:flex;align-items:center;gap:10px;padding:10px 16px}
@@ -1896,6 +2243,10 @@ body{
 .post-action-sm{border:none;background:transparent;font-size:13px;cursor:pointer;padding:4px;opacity:0.5;transition:all 0.15s ease;border-radius:6px}
 .post-action-sm:hover{opacity:1;background:var(--bg)}
 .photo-edit-wrap{background:var(--bg);padding:10px 0}
+.pe-change-btn{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);font-size:12px;color:var(--text);cursor:pointer;transition:all 0.15s}
+.pe-change-btn:hover{background:var(--bg)}
+.pe-change-btn .icon-line svg{width:13px;height:13px}
+.pe-file-name{font-size:11px;color:var(--text-light);margin-left:6px}
 
 /* Post image */
 .post-image-wrap{position:relative;width:100%;aspect-ratio:1;overflow:hidden;background:#fafafa}
@@ -1920,10 +2271,15 @@ body{
 /* Post actions */
 .post-actions{display:flex;align-items:center;justify-content:space-between;padding:8px 16px 4px}
 .post-actions-left{display:flex;gap:14px}
-.action-btn{border:none;background:transparent;font-size:22px;cursor:pointer;padding:2px;transition:all 0.15s ease;line-height:1}
+.action-btn{border:none;background:transparent;font-size:22px;cursor:pointer;padding:2px;transition:all 0.15s ease;line-height:1;display:flex;align-items:center}
 .action-btn:hover{opacity:0.6}
 .action-btn:active{transform:scale(0.85)}
 .action-btn.liked{animation:likePop 0.3s ease}
+.heart-icon{width:24px;height:24px;transition:all 0.2s ease;color:var(--text-light)}
+.heart-icon.filled{fill:#ed4956;stroke:#ed4956}
+.heart-icon-sm{width:16px;height:16px;transition:all 0.2s ease;color:var(--text-light);vertical-align:middle}
+.heart-icon-sm.filled{fill:#ed4956;stroke:#ed4956}
+.comment-icon{width:24px;height:24px;color:var(--text-light)}
 @keyframes likePop{0%{transform:scale(1)}50%{transform:scale(1.25)}100%{transform:scale(1)}}
 
 /* Post details */
@@ -1939,7 +2295,7 @@ body{
 .post-comment-input{display:flex;align-items:center;gap:8px;padding:8px 16px 12px;border-top:1px solid var(--border-light)}
 .quick-comment{flex:1;border:none;background:transparent;font-size:13px;font-family:inherit;color:var(--text);outline:none}
 .quick-comment::placeholder{color:var(--text-light)}
-.comment-send{border:none;background:transparent;font-size:13px;font-weight:600;color:var(--accent);cursor:pointer;font-family:inherit;padding:4px 6px}
+.comment-send{border:none;background:transparent;font-size:13px;font-weight:600;color:var(--text-light);cursor:pointer;font-family:inherit;padding:4px 6px}
 .post-time{padding:2px 16px 12px;font-size:10px;color:var(--text-light);letter-spacing:0.3px;text-transform:uppercase}
 
 /* ============ UPLOAD MODAL ============ */
@@ -1959,7 +2315,7 @@ body{
 .btn-cancel,.btn-confirm{flex:1;padding:10px;border:none;border-radius:var(--radius-sm);font-size:14px;cursor:pointer;font-family:inherit;transition:all 0.15s ease;font-weight:600}
 .btn-cancel{background:transparent;color:var(--text-light)}
 .btn-cancel:hover{color:var(--text)}
-.btn-confirm{background:var(--accent);color:#fff}
+.btn-confirm{background:var(--bg-card);color:var(--text);border:1px solid var(--border)}
 .btn-confirm:hover:not(:disabled){opacity:0.9}
 .btn-confirm:disabled{opacity:0.4;cursor:not-allowed}
 
@@ -1995,13 +2351,13 @@ body{
 .cp-name{width:70px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:var(--bg);color:var(--text);outline:none}
 .cp-input{flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:var(--bg);color:var(--text);outline:none}
 .cp-input:focus,.cp-name:focus{border-color:var(--text)}
-.cp-send{border:none;background:var(--accent);color:#fff;padding:8px 14px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.15s ease}
+.cp-send{border:1px solid var(--border);background:var(--bg-card);color:var(--text);padding:8px 14px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.15s ease}
 .cp-send:hover{opacity:0.9}
 .slide-up-enter-active,.slide-up-leave-active{transition:transform 0.3s cubic-bezier(0.4,0,0.2,1)}
 .slide-up-enter-from,.slide-up-leave-to{transform:translateY(100%)}
 
 /* ============ MESSAGE FORM ============ */
-.msg-form{background:var(--bg-card);border-radius:var(--radius-lg);padding:18px;margin:0 16px 16px;border:1px solid var(--border-light)}
+.msg-form{background:var(--bg-card);border-radius:var(--radius-lg);padding:18px;margin:0 16px 16px;border:1px solid var(--border-light);transition:background 0.35s ease, border-color 0.35s ease}
 .form-row{display:flex;gap:8px;margin-bottom:10px}
 .form-input{flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;background:var(--bg);color:var(--text);outline:none;transition:all 0.15s ease}
 .form-input:focus{border-color:var(--text)}
@@ -2012,10 +2368,10 @@ body{
 .form-textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;background:var(--bg);color:var(--text);outline:none;resize:none;margin-bottom:10px;line-height:1.5;transition:all 0.15s ease}
 .form-textarea:focus{border-color:var(--text)}
 .form-textarea::placeholder{color:var(--text-light)}
-.submit-btn{width:80px;padding:9px 0;border:none;border-radius:var(--radius-sm);background:var(--accent);color:#fff;font-size:13px;cursor:pointer;font-family:inherit;transition:all 0.15s ease;flex-shrink:0;font-weight:600}
+.submit-btn{width:80px;padding:9px 0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-card);color:var(--text);font-size:13px;cursor:pointer;font-family:inherit;transition:all 0.15s ease;flex-shrink:0;font-weight:600}
 .submit-btn:hover:not(:disabled){opacity:0.9}
 .submit-btn:disabled{opacity:0.3;cursor:not-allowed}
-.btn-primary{background:var(--accent);color:#fff;border:none;border-radius:var(--radius);padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.15s}
+.btn-primary{background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.15s}
 .btn-primary:hover:not(:disabled){opacity:0.9}
 .btn-primary:disabled{opacity:0.3;cursor:not-allowed}
 .btn-secondary{background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);padding:10px 24px;font-size:14px;font-weight:500;cursor:pointer;transition:all 0.15s}
@@ -2039,7 +2395,7 @@ body{
 .msg-edit-wrap{margin:6px 0}
 .msg-edit-actions{display:flex;gap:8px;justify-content:flex-end}
 .msg-text{font-size:14px;line-height:1.5;word-break:break-word;color:var(--text)}
-.msg-like-btn{margin-top:6px;border:none;background:transparent;font-size:13px;cursor:pointer;color:var(--text-light);padding:3px 6px;font-family:inherit;transition:all 0.15s ease;border-radius:6px}
+.msg-like-btn{margin-top:6px;border:none;background:transparent;font-size:13px;cursor:pointer;color:var(--text-light);padding:3px 6px;font-family:inherit;transition:all 0.15s ease;border-radius:6px;display:inline-flex;align-items:center;gap:4px}
 .msg-like-btn:hover{color:var(--text)}
 
 /* Private toggle */
@@ -2048,6 +2404,98 @@ body{
 .private-toggle input{display:none}
 .private-label{font-size:12px;color:var(--text-light);transition:all 0.15s ease;white-space:nowrap;padding:5px 10px;background:var(--bg);border-radius:6px;border:1px solid var(--border)}
 .private-toggle input:checked + .private-label{color:var(--accent);border-color:var(--accent);background:var(--accent-light);font-weight:500}
+
+/* ============ SETTINGS ============ */
+.settings-list{max-width:480px;margin:0 auto}
+.settings-item{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:var(--bg-card);border-radius:14px;margin-bottom:10px;border:1px solid var(--border-light);transition:background 0.35s ease, border-color 0.35s ease}
+.settings-label{font-size:14px;color:var(--text);font-weight:500}
+.settings-logout{width:100%;padding:14px 20px;border:1px solid var(--border-light);background:var(--bg-card);border-radius:14px;color:#ed4956;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:var(--transition);margin-top:4px}
+.settings-logout:hover{background:#fff5f5;border-color:#fecaca}
+.settings-logout:active{transform:scale(0.98)}
+
+/* Toggle switch */
+.toggle-switch{position:relative;display:inline-block;width:44px;height:24px}
+.toggle-switch input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;cursor:pointer;inset:0;background:var(--border);border-radius:24px;transition:var(--transition)}
+.toggle-slider:before{content:'';position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:var(--transition)}
+.toggle-switch input:checked + .toggle-slider{background:var(--accent)}
+.toggle-switch input:checked + .toggle-slider:before{transform:translateX(20px)}
+
+/* ============ DARK MODE ============ */
+.dark-mode{
+  --bg:#0a0a0a;--bg-card:#1a1a1a;--text:#e8e8e8;--text-light:#aaa;
+  --accent:#ccc;--accent-light:#222;--accent-soft:#2a2a2a;
+  --accent-deep:#eee;--gradient-soft:linear-gradient(135deg, #111 0%, #1a1a1a 50%, #151515 100%);
+  --gradient-accent:linear-gradient(135deg, #555, #999);
+  --border:#2a2a2a;--border-light:#222;
+  --shadow:0 1px 6px rgba(0,0,0,0.3);
+  --shadow-md:0 2px 12px rgba(0,0,0,0.4);
+  --shadow-lg:0 6px 30px rgba(0,0,0,0.5);
+}
+.dark-mode .header{background:rgba(10,10,10,0.95)}
+.dark-mode .login-icon{background:#2a2a2a}
+.dark-mode .post-card{border-color:var(--border)}
+.dark-mode .msg-card{border-color:var(--border)}
+.dark-mode .form-input,.dark-mode .form-textarea,.dark-mode .modal-input{background:var(--bg-card);border-color:var(--border);color:var(--text)}
+.dark-mode .upload-btn:hover{background:var(--bg-card)}
+.dark-mode .bottom-nav{background:rgba(10,10,10,0.95)}
+.dark-mode .search-panel{background:var(--bg-card);border-color:var(--border)}
+.dark-mode .modal-overlay{background:rgba(0,0,0,0.7)}
+.dark-mode .login-modal{background:var(--bg-card)}
+.dark-mode .auth-error{background:#2a1515;border:1px solid #3a2020}
+.dark-mode .upload-modal{background:var(--bg-card)}
+.dark-mode .settings-logout:hover{background:#2a1515;border-color:#3a2020}
+.dark-mode .ppm-wrap{background:var(--bg-card)}
+.dark-mode .comments-panel{background:var(--bg-card)}
+.dark-mode .login-tab{color:var(--text-light)}
+.dark-mode .login-tab.active{color:var(--text);background:var(--bg-card)}
+.dark-mode .section-title{color:var(--text)}
+.dark-mode .msg-name{color:var(--text)}
+.dark-mode .post-username{color:var(--text)}
+.dark-mode .profile-name{color:var(--text)}
+.dark-mode .lp-subtitle{color:var(--text-light)}
+.dark-mode .post-likes{color:var(--text)}
+.dark-mode .post-caption{color:var(--text)}
+.dark-mode .post-caption strong{color:var(--text)}
+.dark-mode .post-avatar{background:#2a2a2a}
+.dark-mode .ppm-info{background:var(--bg-card)}
+.dark-mode .ppm-author{color:var(--text)}
+.dark-mode .ppm-caption{color:var(--text)}
+.dark-mode .ppm-stats{color:var(--text-light)}
+.dark-mode .ppm-btn{background:var(--bg-card);border-color:var(--border);color:var(--text)}
+.dark-mode .ppm-btn:hover{background:var(--accent-light)}
+.dark-mode .ppm-delete:hover{background:#2a1515;border-color:#3a2020}
+.dark-mode .post-recent-comments{color:var(--text)}
+.dark-mode .post-comment-item{color:var(--text)}
+.dark-mode .post-comment-item strong{color:var(--text)}
+.dark-mode .post-view-comments{color:var(--text-light)}
+.dark-mode .comment-send{color:var(--text-light)}
+.dark-mode .quick-comment{color:var(--text)}
+.dark-mode .cp-body strong{color:var(--text)}
+.dark-mode .cp-body p{color:var(--text)}
+.dark-mode .cp-time{color:var(--text-light)}
+.dark-mode .section{background:var(--bg-card);border-color:var(--border)}
+.dark-mode .feature-card{background:var(--bg-card);border-color:var(--border)}
+.dark-mode .settings-item{background:var(--bg-card);border-color:var(--border)}
+.dark-mode .profile-header{background:var(--bg-card)}
+.dark-mode .profile-stats{background:var(--bg-card);border-color:var(--border)}
+.dark-mode .upload-btn{border-color:var(--border)}
+.dark-mode .upload-btn:hover{background:var(--accent-light)}
+.dark-mode .upload-location{color:var(--text-light)}
+.dark-mode .upload-location svg{stroke:var(--text-light)}
+.dark-mode .upload-preview{background:var(--bg-card)}
+.dark-mode .sp-photo-author{color:var(--text-light)}
+.dark-mode .sp-msg-name{color:var(--text)}
+.dark-mode .sp-msg-content{color:var(--text)}
+.dark-mode .empty-state{color:var(--text-light)}
+.dark-mode .pstat-label{color:var(--text-light)}
+.dark-mode .profile-bio{color:var(--text-light)}
+.dark-mode .form-input,.dark-mode .form-textarea{color:var(--text)}
+.dark-mode .story-name{color:var(--text-light)}
+.dark-mode .post-time{color:var(--text-light)}
+.dark-mode .upload-caption{color:var(--text)}
+.dark-mode .upload-location{color:var(--text-light)}
+.dark-mode .msg-text{color:var(--text)}
 
 /* ============ EASTER EGG ============ */
 .egg-page{position:fixed;inset:0;z-index:9997;background:linear-gradient(135deg,#0a0a0a,#1a1a1a,#0d0d0d);display:flex;align-items:center;justify-content:center;color:#fff;overflow:hidden}
@@ -2120,6 +2568,17 @@ body{
   .stories-bar{padding:12px}
   .post-card{margin:0}
   .confirm-box{padding:24px 20px 16px}
+  .main{padding:0 8px 20px}
+  .section{border:1px solid var(--border-light);border-radius:var(--radius-lg);margin:0 0 8px;background:var(--bg-card);overflow:hidden}
+  .login-page{padding:40px 24px}
+  .msg-card{border-color:var(--border-light)}
+  .post-card{border-color:var(--border-light)}
+  .post-recent-comments{color:var(--text)}
+  .post-comment-item strong{color:var(--text)}
+  .post-comment-item{color:var(--text)}
+  .post-view-comments{color:var(--text-light)}
+  .comment-send{color:var(--text)}
+  .quick-comment{color:var(--text)}
 }
 
 /* ============ SCROLLBAR ============ */

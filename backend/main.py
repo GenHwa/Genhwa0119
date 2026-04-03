@@ -130,6 +130,16 @@ def init_db():
                     UNIQUE KEY uk_msg_user (message_id, user_hash)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
+            # Follows table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS letter_follows (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    follower_id INT NOT NULL,
+                    following_id INT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uk_follow (follower_id, following_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
 
             # Migrate: add missing columns to existing tables
             for col_def in [
@@ -222,7 +232,7 @@ def register(username: str = Form(""), password: str = Form(""), nickname: str =
             user_id = cursor.lastrowid
         conn.commit()
         token = create_token(user_id, username.strip())
-        return {"code": 200, "token": token, "user": {"id": user_id, "username": username.strip(), "nickname": nickname.strip() or username.strip()}}
+        return {"code": 200, "token": token, "user": {"id": user_id, "username": username.strip(), "nickname": nickname.strip() or username.strip(), "avatar": ""}}
     finally:
         conn.close()
 
@@ -239,7 +249,7 @@ def login(username: str = Form(""), password: str = Form("")):
             if not user or user["password_hash"] != hash_password(password):
                 raise HTTPException(status_code=401, detail="Invalid credentials")
             token = create_token(user["id"], user["username"])
-        return {"code": 200, "token": token, "user": {"id": user["id"], "username": user["username"], "nickname": user["nickname"]}}
+        return {"code": 200, "token": token, "user": {"id": user["id"], "username": user["username"], "nickname": user["nickname"], "avatar": user.get("avatar", "")}}
     finally:
         conn.close()
 
@@ -801,7 +811,8 @@ def delete_photo(photo_id: int, token: str = Form("")):
 
 
 @app.put("/api/photos/{photo_id}")
-def update_photo(photo_id: int, caption: str = Form(None), is_private: int = Form(None), token: str = Form("")):
+def update_photo(photo_id: int, caption: str = Form(None), is_private: int = Form(None),
+                 token: str = Form(""), file: UploadFile = File(None)):
     if not token:
         raise HTTPException(status_code=401, detail="Login required")
     user = decode_token(token)
@@ -810,7 +821,7 @@ def update_photo(photo_id: int, caption: str = Form(None), is_private: int = For
     conn = get_db()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id FROM letter_photos WHERE id=%s AND user_id=%s", (photo_id, user["user_id"]))
+            cursor.execute("SELECT id, filename FROM letter_photos WHERE id=%s AND user_id=%s", (photo_id, user["user_id"]))
             if not cursor.fetchone():
                 raise HTTPException(status_code=403, detail="Not your photo")
             updates = []
@@ -821,6 +832,22 @@ def update_photo(photo_id: int, caption: str = Form(None), is_private: int = For
             if is_private is not None:
                 updates.append("is_private=%s")
                 params.append(is_private)
+            # Handle file replacement
+            if file and file.content_type and file.content_type.startswith("image/"):
+                old_photo = cursor.execute("SELECT filename FROM letter_photos WHERE id=%s", (photo_id,))
+                old_row = cursor.fetchone()
+                ext = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
+                new_filename = f"{uuid.uuid4().hex}{ext}"
+                filepath = UPLOAD_DIR / new_filename
+                with open(filepath, "wb") as buffer:
+                    shutil.copyfileobj(file.file, buffer)
+                updates.append("filename=%s")
+                params.append(new_filename)
+                # Delete old file
+                if old_row:
+                    old_path = UPLOAD_DIR / old_row["filename"]
+                    if old_path.exists():
+                        old_path.unlink()
             if updates:
                 params.append(photo_id)
                 cursor.execute(f"UPDATE letter_photos SET {', '.join(updates)} WHERE id=%s", params)
@@ -830,7 +857,205 @@ def update_photo(photo_id: int, caption: str = Form(None), is_private: int = For
         conn.close()
 
 
+# ============ Search API (photos & messages) ============
+
+@app.get("/api/photos/search")
+def search_photos(q: str = "", token: str = ""):
+    if not q.strip():
+        return {"code": 200, "data": []}
+    user = None
+    if token:
+        user = decode_token(token)
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            term = f"%{q.strip()}%"
+            if user:
+                cursor.execute(
+                    "SELECT p.*, u.nickname as author_name, u.avatar as author_avatar FROM letter_photos p "
+                    "LEFT JOIN letter_users u ON p.user_id = u.id "
+                    "WHERE (p.caption LIKE %s OR u.nickname LIKE %s) AND (p.is_private = 0 OR p.user_id = %s) "
+                    "ORDER BY p.created_at DESC LIMIT 20",
+                    (term, term, user["user_id"])
+                )
+            else:
+                cursor.execute(
+                    "SELECT p.*, u.nickname as author_name, u.avatar as author_avatar FROM letter_photos p "
+                    "LEFT JOIN letter_users u ON p.user_id = u.id "
+                    "WHERE (p.caption LIKE %s OR u.nickname LIKE %s) AND p.is_private = 0 "
+                    "ORDER BY p.created_at DESC LIMIT 20",
+                    (term, term)
+                )
+            photos = cursor.fetchall()
+            for photo in photos:
+                photo["created_at"] = fmt_time(photo["created_at"])
+        return {"code": 200, "data": photos}
+    finally:
+        conn.close()
+
+
+@app.get("/api/messages/search")
+def search_messages(q: str = "", token: str = ""):
+    if not q.strip():
+        return {"code": 200, "data": []}
+    user = None
+    if token:
+        user = decode_token(token)
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            term = f"%{q.strip()}%"
+            if user:
+                cursor.execute(
+                    "SELECT m.*, u.nickname as author_name, u.avatar as author_avatar FROM letter_messages m "
+                    "LEFT JOIN letter_users u ON m.user_id = u.id "
+                    "WHERE (m.content LIKE %s OR m.nickname LIKE %s) AND (m.is_private = 0 OR m.user_id = %s) "
+                    "ORDER BY m.created_at DESC LIMIT 20",
+                    (term, term, user["user_id"])
+                )
+            else:
+                cursor.execute(
+                    "SELECT m.*, u.nickname as author_name, u.avatar as author_avatar FROM letter_messages m "
+                    "LEFT JOIN letter_users u ON m.user_id = u.id "
+                    "WHERE (m.content LIKE %s OR m.nickname LIKE %s) AND m.is_private = 0 "
+                    "ORDER BY m.created_at DESC LIMIT 20",
+                    (term, term)
+                )
+            msgs = cursor.fetchall()
+            for m in msgs:
+                m["created_at"] = fmt_time(m["created_at"])
+        return {"code": 200, "data": msgs}
+    finally:
+        conn.close()
+
+
+# ============ Follow API ============
+
+@app.post("/api/users/{user_id}/follow")
+def follow_user(user_id: int, token: str = Form("")):
+    if not token:
+        raise HTTPException(status_code=401, detail="Login required")
+    user = decode_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    if user["user_id"] == user_id:
+        raise HTTPException(status_code=400, detail="Cannot follow yourself")
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT id FROM letter_follows WHERE follower_id=%s AND following_id=%s",
+                (user["user_id"], user_id)
+            )
+            existing = cursor.fetchone()
+            if existing:
+                cursor.execute(
+                    "DELETE FROM letter_follows WHERE follower_id=%s AND following_id=%s",
+                    (user["user_id"], user_id)
+                )
+                followed = False
+            else:
+                cursor.execute(
+                    "INSERT INTO letter_follows (follower_id, following_id) VALUES (%s, %s)",
+                    (user["user_id"], user_id)
+                )
+                followed = True
+        conn.commit()
+        return {"code": 200, "followed": followed}
+    finally:
+        conn.close()
+
+
+@app.get("/api/users/{user_id}/follow/status")
+def get_follow_status(user_id: int, token: str = ""):
+    """Check if current user follows target user, and get follow stats"""
+    is_following = False
+    if token:
+        user = decode_token(token)
+        if user and user["user_id"] != user_id:
+            conn = get_db()
+            try:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT id FROM letter_follows WHERE follower_id=%s AND following_id=%s",
+                        (user["user_id"], user_id)
+                    )
+                    is_following = cursor.fetchone() is not None
+            finally:
+                conn.close()
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) as cnt FROM letter_follows WHERE follower_id=%s", (user_id,))
+            following_count = cursor.fetchone()["cnt"]
+            cursor.execute("SELECT COUNT(*) as cnt FROM letter_follows WHERE following_id=%s", (user_id,))
+            followers_count = cursor.fetchone()["cnt"]
+            cursor.execute("SELECT COUNT(*) as cnt FROM letter_photos WHERE user_id=%s AND is_private=0", (user_id,))
+            posts_count = cursor.fetchone()["cnt"]
+        return {"code": 200, "data": {"is_following": is_following, "following_count": following_count, "followers_count": followers_count, "posts_count": posts_count}}
+    finally:
+        conn.close()
+
+
 # ============ Stats ============
+
+@app.get("/api/users/search")
+def search_users(q: str = ""):
+    if not q.strip():
+        return {"code": 200, "data": []}
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            search_term = f"%{q.strip()}%"
+            cursor.execute(
+                "SELECT id, username, nickname, avatar, created_at FROM letter_users "
+                "WHERE username LIKE %s OR nickname LIKE %s ORDER BY created_at DESC LIMIT 20",
+                (search_term, search_term)
+            )
+            users = cursor.fetchall()
+            for u in users:
+                u["created_at"] = fmt_time(u["created_at"])
+        return {"code": 200, "data": users}
+    finally:
+        conn.close()
+
+
+@app.get("/api/users/{user_id}/photos")
+def get_user_photos(user_id: int, token: str = ""):
+    user = None
+    if token:
+        user = decode_token(token)
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            if user:
+                cursor.execute(
+                    "SELECT p.*, u.nickname as author_name, u.avatar as author_avatar FROM letter_photos p "
+                    "LEFT JOIN letter_users u ON p.user_id = u.id "
+                    "WHERE p.user_id = %s AND (p.is_private = 0 OR p.user_id = %s) ORDER BY p.created_at DESC",
+                    (user_id, user["user_id"])
+                )
+            else:
+                cursor.execute(
+                    "SELECT p.*, u.nickname as author_name, u.avatar as author_avatar FROM letter_photos p "
+                    "LEFT JOIN letter_users u ON p.user_id = u.id "
+                    "WHERE p.user_id = %s AND p.is_private = 0 ORDER BY p.created_at DESC",
+                    (user_id,)
+                )
+            photos = cursor.fetchall()
+            for photo in photos:
+                photo["created_at"] = fmt_time(photo["created_at"])
+                cursor.execute(
+                    "SELECT * FROM letter_comments WHERE photo_id=%s ORDER BY created_at DESC LIMIT 3",
+                    (photo["id"],)
+                )
+                photo["recent_comments"] = cursor.fetchall()
+                for c in photo["recent_comments"]:
+                    c["created_at"] = fmt_time(c["created_at"])
+        return {"code": 200, "data": photos}
+    finally:
+        conn.close()
+
 
 @app.get("/api/stats")
 def get_stats():
