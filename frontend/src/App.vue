@@ -476,8 +476,9 @@
           <template v-if="profileTab === 'messages'">
             <div class="msg-list" v-if="myMessages.length">
               <div v-for="msg in myMessages" :key="msg.id" class="msg-card">
-                <div class="msg-avatar" :style="getAvatarStyle(currentUser)">
-                  <span v-if="!currentUser?.avatar">{{ msg.nickname?.charAt(0) || '?' }}</span>
+                <div class="msg-avatar" :class="{ 'no-avatar-text': currentUser?.avatar }">
+                  <img v-if="currentUser?.avatar" :src="UPLOAD_BASE + currentUser.avatar" class="avatar-img" />
+                  <span v-else>{{ msg.nickname?.charAt(0) || '?' }}</span>
                 </div>
                 <div class="msg-body">
                   <div class="msg-meta">
@@ -1934,7 +1935,7 @@ body{
   box-shadow:var(--shadow);
 }
 .login-icon.logged.has-avatar{padding:0;overflow:hidden}
-.avatar-img{width:100%;height:100%;object-fit:cover;display:block}
+.avatar-img{width:100%;height:100%;object-fit:cover;display:block;border-radius:50%}
 .user-menu{position:relative}
 
 /* User dropdown */
