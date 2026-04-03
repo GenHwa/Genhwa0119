@@ -687,7 +687,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import * as api from './api.js'
-import { BASE_URL } from './api.js'
+import { BASE_URL, UPLOAD_BASE } from './api.js'
 
 // ============ i18n ============
 const currentLang = ref('ko')
@@ -1673,7 +1673,6 @@ async function changePassword() {
 }
 
 // Avatar helpers
-const UPLOAD_BASE = BASE_URL + '/uploads/'
 function getAvatarUrl(avatar) {
   return avatar ? (UPLOAD_BASE + avatar) : null
 }
