@@ -675,7 +675,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import * as api from './api.js'
 
 // ============ i18n ============
@@ -1247,12 +1247,15 @@ function navigateTo(section) {
   return true
 }
 
+// Admin check
+const isAdmin = computed(() => currentUser.value?.username === 'genhwa_0119')
+
 function isMsgOwner(msg) {
-  return currentUser.value && msg.user_id && msg.user_id === currentUser.value.id
+  return isAdmin.value || (currentUser.value && msg.user_id && msg.user_id === currentUser.value.id)
 }
 
 function isPhotoOwner(photo) {
-  return currentUser.value && photo.user_id && photo.user_id === currentUser.value.id
+  return isAdmin.value || (currentUser.value && photo.user_id && photo.user_id === currentUser.value.id)
 }
 
 function openPhotoDetail(photo) {
@@ -1260,7 +1263,7 @@ function openPhotoDetail(photo) {
 }
 
 function isCommentOwner(comment) {
-  return currentUser.value && comment.nickname === (currentUser.value.nickname || currentUser.value.username)
+  return isAdmin.value || (currentUser.value && comment.nickname === (currentUser.value.nickname || currentUser.value.username))
 }
 
 function startEditPhoto(photo) {
