@@ -18,7 +18,7 @@
           </button>
           <!-- User menu -->
           <div v-else class="user-menu" @click="showUserMenu = !showUserMenu">
-            <span class="login-icon logged">{{ currentUser.nickname?.charAt(0) || currentUser.username?.charAt(0) }}</span>
+            <span class="login-icon logged" :style="getAvatarStyle(currentUser)" :class="{ 'no-avatar-text': currentUser.avatar }">{{ currentUser.avatar ? '' : (currentUser.nickname?.charAt(0) || currentUser.username?.charAt(0)) }}</span>
             <transition name="fade">
               <div v-if="showUserMenu" class="user-dropdown" @click.stop>
                 <div class="ud-name">{{ currentUser.nickname || currentUser.username }}</div>
@@ -59,7 +59,7 @@
     <nav class="bottom-nav">
       <button v-for="item in navItems" :key="item.id"
         :class="['bnav-btn', { active: activeSection === item.id }]"
-        @click="activeSection = item.id">
+        @click="navigateTo(item.id)">
         <span class="bnav-icon">{{ item.icon }}</span>
         <span class="bnav-label">{{ t(item.id) }}</span>
       </button>
@@ -73,23 +73,25 @@
         <!-- Profile Header -->
         <div class="profile-header">
           <div class="profile-avatar-wrap">
-            <div class="profile-avatar" @dblclick="miniEgg">🤍</div>
+            <div class="profile-avatar" :style="currentUser?.avatar ? `background-image: url('http://localhost:520/uploads/${currentUser.avatar}'); background-size: cover; background-position: center;` : ''" :class="{ 'no-avatar': !currentUser?.avatar }" @dblclick="miniEgg">
+              <span v-if="!currentUser?.avatar">🤍</span>
+            </div>
             <div class="avatar-ring"></div>
           </div>
           <div class="profile-info">
-            <h2 class="profile-name">diary</h2>
+            <h2 class="profile-name">{{ currentUser ? (currentUser.nickname || currentUser.username) : 'diary' }}</h2>
             <p class="profile-bio">{{ t('profileBio') }}</p>
           </div>
         </div>
 
         <!-- Stats -->
         <div class="profile-stats">
-          <div class="pstat" @click="activeSection = 'gallery'">
+          <div class="pstat" @click="navigateTo('gallery')">
             <span class="pstat-num">{{ stats.photos }}</span>
             <span class="pstat-label">{{ t('photos') }}</span>
           </div>
           <div class="pstat-divider"></div>
-          <div class="pstat" @click="activeSection = 'messages'">
+          <div class="pstat" @click="navigateTo('messages')">
             <span class="pstat-num">{{ stats.messages }}</span>
             <span class="pstat-label">{{ t('messages') }}</span>
           </div>
@@ -163,7 +165,9 @@
           <div v-for="photo in filteredPhotos" :key="photo.id" class="post-card" :class="{ 'post-private': photo.is_private }">
             <!-- Post Header -->
             <div class="post-header">
-              <div class="post-avatar">🤍</div>
+              <div class="post-avatar" :style="photo.author_avatar ? `background-image: url('${UPLOAD_BASE}${photo.author_avatar}'); background-size: cover; background-position: center;` : ''" :class="{ 'no-avatar-text': photo.author_avatar }">
+                <span v-if="!photo.author_avatar">🤍</span>
+              </div>
               <div class="post-user-info">
                 <span class="post-username">{{ photo.author_name || 'diary' }}</span>
                 <span class="post-location">{{ photo.location || t('inMyHeart') }}</span>
@@ -174,7 +178,7 @@
               <div v-if="isPhotoOwner(photo)" class="post-owner-actions">
                 <button class="post-action-sm" @click="startEditPhoto(photo)" title="edit">✏️</button>
                 <button class="post-action-sm" @click="togglePhotoPrivate(photo)" :title="photo.is_private ? t('setPublic') : t('setPrivate')">
-                  {{ photo.is_private ? '🔓' : '🔒' }}
+                  {{ photo.is_private ? '🔒' : '🔓' }}
                 </button>
                 <button class="post-action-sm" @click="handleDeletePhoto(photo.id)" title="delete">🗑️</button>
               </div>
@@ -260,13 +264,26 @@
           </div>
           <div class="cp-list">
             <div v-for="c in commentsList" :key="c.id" class="cp-item">
-              <div class="cp-avatar">{{ c.nickname.charAt(0) }}</div>
+              <div class="cp-avatar" :style="c.avatar ? `background-image: url('${UPLOAD_BASE}${c.avatar}'); background-size: cover; background-position: center;` : ''" :class="{ 'no-avatar-text': c.avatar }">
+                <span v-if="!c.avatar">{{ c.nickname.charAt(0) }}</span>
+              </div>
               <div class="cp-body">
                 <div class="cp-meta">
                   <strong>{{ c.nickname }}</strong>
                   <span class="cp-time">{{ formatTimeAgo(c.created_at) }}</span>
+                  <div v-if="isCommentOwner(c)" class="cp-actions">
+                    <button class="cp-action-btn" @click="startEditComment(c)" title="edit">✏️</button>
+                    <button class="cp-action-btn cp-delete" @click="handleDeleteComment(c.id)" title="delete">🗑️</button>
+                  </div>
                 </div>
-                <p>{{ c.content }}</p>
+                <div v-if="editingCommentId === c.id" class="cp-edit-wrap">
+                  <input v-model="editingCommentContent" class="cp-edit-input" @keyup.enter="confirmEditComment(c.id)" />
+                  <div class="cp-edit-actions">
+                    <button class="btn-cancel" @click="editingCommentId = null" style="font-size:12px;padding:6px 12px">{{ t('cancel') }}</button>
+                    <button class="btn-confirm" @click="confirmEditComment(c.id)" style="font-size:12px;padding:6px 12px">{{ t('save') }}</button>
+                  </div>
+                </div>
+                <p v-else>{{ c.content }}</p>
               </div>
             </div>
             <div v-if="!commentsList.length" class="cp-empty">{{ t('noComments') }}</div>
@@ -276,6 +293,105 @@
             <input v-model="commentText" :placeholder="t('addComment')" class="cp-input"
               @keyup.enter="submitComment" />
             <button class="cp-send" @click="submitComment">{{ t('post') }}</button>
+          </div>
+        </div>
+      </transition>
+
+      <!-- ===== PROFILE / MY CONTENT ===== -->
+      <section v-if="activeSection === 'profile'" class="section">
+        <!-- Profile Header -->
+        <div class="profile-header">
+          <div class="profile-avatar-wrap">
+            <div class="profile-avatar lg-avatar" :style="getAvatarStyle(currentUser)" @click="avatarInput?.click()">
+              <span v-if="!currentUser?.avatar">🤍</span>
+              <div class="avatar-edit-hint">✎</div>
+            </div>
+            <input ref="avatarInput" type="file" accept="image/*" style="display:none" @change="handleAvatarUpload">
+            <div class="avatar-ring"></div>
+          </div>
+          <div class="profile-info">
+            <h2 class="profile-name">{{ currentUser?.nickname || currentUser?.username || 'diary' }}</h2>
+            <p class="profile-bio">{{ t('profileBio') }}</p>
+          </div>
+        </div>
+
+        <!-- Login Required -->
+        <div v-if="!currentUser" class="profile-login-required">
+          <p>{{ t('loginFirst') }}</p>
+          <button class="btn-primary" @click="showLoginModal = true">{{ t('login') }}</button>
+        </div>
+
+        <!-- My Content -->
+        <div v-else>
+          <!-- Tabs -->
+          <div class="profile-tabs">
+            <button :class="['ptab', { active: profileTab === 'photos' }]" @click="profileTab = 'photos'">{{ t('gallery') }}</button>
+            <button :class="['ptab', { active: profileTab === 'messages' }]" @click="profileTab = 'messages'">{{ t('messages') }}</button>
+          </div>
+
+          <!-- My Photos -->
+          <template v-if="profileTab === 'photos'">
+            <div class="profile-grid" v-if="myPhotos.length">
+              <div v-for="photo in myPhotos" :key="photo.id" class="pg-item">
+                <img :src="`${UPLOAD_BASE}${photo.filename}`" @click="openPhotoDetail(photo)" />
+              </div>
+            </div>
+            <div v-else class="profile-empty">{{ t('noPhotos') }}</div>
+          </template>
+
+          <!-- My Messages -->
+          <template v-if="profileTab === 'messages'">
+            <div class="msg-list" v-if="myMessages.length">
+              <div v-for="msg in myMessages" :key="msg.id" class="msg-card">
+                <div class="msg-avatar" :style="getAvatarStyle(currentUser)">
+                  <span v-if="!currentUser?.avatar">{{ msg.nickname?.charAt(0) || '?' }}</span>
+                </div>
+                <div class="msg-body">
+                  <div class="msg-meta">
+                    <span class="msg-name">{{ msg.nickname }}</span>
+                    <span v-if="msg.is_private" class="msg-private-badge">🔒</span>
+                    <span class="msg-time">{{ msg.created_at }}</span>
+                  </div>
+                  <p>{{ msg.content }}</p>
+                </div>
+              </div>
+            </div>
+            <div v-else class="profile-empty">{{ t('noMessages') }}</div>
+          </template>
+        </div>
+      </section>
+
+      <!-- Profile Photo Modal -->
+      <transition name="fade">
+        <div v-if="profilePhotoModal" class="modal-overlay" @click.self="profilePhotoModal = null">
+          <div class="ppm-wrap" @click.stop>
+            <button class="ppm-close" @click="profilePhotoModal = null">×</button>
+            <img :src="`${UPLOAD_BASE}${profilePhotoModal.filename}`" class="ppm-img" />
+            <div class="ppm-info">
+              <div class="ppm-header">
+                <div class="post-avatar sm-avatar" :style="profilePhotoModal.author_avatar ? `background-image: url('${UPLOAD_BASE}${profilePhotoModal.author_avatar}'); background-size: cover; background-position: center;` : ''">
+                  <span v-if="!profilePhotoModal.author_avatar">🤍</span>
+                </div>
+                <div>
+                  <div class="ppm-author">{{ profilePhotoModal.author_name || 'diary' }}</div>
+                  <div class="ppm-location">{{ profilePhotoModal.location || t('inMyHeart') }}</div>
+                </div>
+              </div>
+              <p class="ppm-caption">{{ profilePhotoModal.caption }}</p>
+              <div class="ppm-stats">
+                <span>♥ {{ profilePhotoModal.likes || 0 }}</span>
+                <span>💬 {{ profilePhotoModal.comments_count || 0 }}</span>
+                <span>{{ profilePhotoModal.created_at }}</span>
+              </div>
+              <div class="ppm-actions" v-if="isPhotoOwner(profilePhotoModal)">
+                <button class="ppm-btn" @click="togglePhotoPrivate(profilePhotoModal)">
+                  {{ profilePhotoModal.is_private ? '🔓' : '🔒' }}
+                </button>
+                <button class="ppm-btn ppm-delete" @click="handleDeletePhoto(profilePhotoModal.id); profilePhotoModal = null">
+                  🗑️
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </transition>
@@ -316,7 +432,9 @@
 
         <div class="msg-list" v-if="filteredMessages.length">
           <div v-for="msg in filteredMessages" :key="msg.id" class="msg-card" :class="{ 'msg-private': msg.is_private }">
-            <div class="msg-avatar">{{ msg.nickname.charAt(0) }}</div>
+            <div class="msg-avatar" :style="msg.author_avatar ? `background-image: url('${UPLOAD_BASE}${msg.author_avatar}'); background-size: cover; background-position: center;` : ''" :class="{ 'no-avatar-text': msg.author_avatar }">
+              <span v-if="!msg.author_avatar">{{ msg.nickname.charAt(0) }}</span>
+            </div>
             <div class="msg-body">
               <div class="msg-meta">
                 <span class="msg-name">{{ msg.nickname }}</span>
@@ -326,7 +444,7 @@
                 <div v-if="isMsgOwner(msg)" class="msg-actions-menu">
                   <button class="msg-action-btn" @click="startEditMsg(msg)" title="edit">✏️</button>
                   <button class="msg-action-btn" @click="toggleMsgPrivate(msg)" :title="msg.is_private ? t('setPublic') : t('setPrivate')">
-                    {{ msg.is_private ? '🔓' : '🔒' }}
+                    {{ msg.is_private ? '🔒' : '🔓' }}
                   </button>
                   <button class="msg-action-btn" @click="handleDeleteMsg(msg.id)" title="delete">🗑️</button>
                 </div>
@@ -394,6 +512,20 @@
     <footer class="footer">
       <p>Made with <span class="heart">♥</span> {{ t('footer') }}</p>
     </footer>
+
+    <!-- Login Required Popup -->
+    <transition name="fade">
+      <div v-if="showLoginRequiredPopup" class="modal-overlay" @click.self="onLoginRequiredCancel">
+        <div class="confirm-box">
+          <div class="confirm-icon">🔒</div>
+          <p class="confirm-text">{{ t('loginRequiredPopup') }}</p>
+          <div class="confirm-actions">
+            <button class="btn-cancel" @click="onLoginRequiredCancel">{{ t('cancel') }}</button>
+            <button class="btn-confirm" @click="onLoginRequiredConfirm">{{ t('ok') }}</button>
+          </div>
+        </div>
+      </div>
+    </transition>
 
     <!-- Confirm Dialog -->
     <transition name="fade">
@@ -464,6 +596,9 @@ const i18n = {
     myPrivate: '나의 비밀글', save: '저장', editMsg: '수정', deleteMsg: '꺼내기',
     deleteConfirm: '이 기록을 걷어낼까요?',
     loginOk: '환영해요 ✨', registerOk: '가입 완료 ✨', authFail: '다시 시도해주세요',
+    loginRequiredPopup: '로그인이 필요한 페이지입니다. 로그인 하시겠습니까?',
+    ok: '확인',
+    profile: '프로필', changeAvatar: '사진 변경', changeNickname: '별명 변경', phone: '전화번호', email: '이메일', changePwd: '비밀번호 변경', oldPwd: '현재 비밀번호', newPwd: '새 비밀번호', pwdChanged: '비밀번호 변경 완료 ✨', profileSaved: '저장 완료 ✨', loginFirst: '로그인 후 이용해주세요',
     timeJustNow: '방금', timeMin: '분', timeHour: '시간', timeDay: '일',
     story1: '첫 날 ☀️', story2: '같이 🌙', story3: '앞으로 🌸',
     story1Content: '처음 너를 봤던 날\n바람이 좋았어 💓',
@@ -504,6 +639,9 @@ const i18n = {
     myPrivate: 'My Private Posts', save: 'Save', editMsg: 'Edit', deleteMsg: 'Remove',
     deleteConfirm: 'Should we take this memory down?',
     loginOk: 'Welcome ✨', registerOk: 'Signed up ✨', authFail: 'Please try again',
+    loginRequiredPopup: 'Login is required for this page. Would you like to login?',
+    ok: 'OK',
+    profile: 'Profile', changeAvatar: 'Change Photo', changeNickname: 'Change Nickname', phone: 'Phone', email: 'Email', changePwd: 'Change Password', oldPwd: 'Current Password', newPwd: 'New Password', pwdChanged: 'Password changed ✨', profileSaved: 'Saved ✨', loginFirst: 'Please login first',
     timeJustNow: 'now', timeMin: 'm', timeHour: 'h', timeDay: 'd',
     story1: 'First Day ☀️', story2: 'Together 🌙', story3: 'Ahead 🌸',
     story1Content: 'The day I first saw you\nthe breeze was nice 💓',
@@ -544,6 +682,9 @@ const i18n = {
     myPrivate: '秘密の投稿', save: '保存', editMsg: '編集', deleteMsg: 'しまう',
     deleteConfirm: 'この記憶をしまいますか？',
     loginOk: 'ようこそ ✨', registerOk: '登録完了 ✨', authFail: 'もう一度お試しください',
+    loginRequiredPopup: 'このページをご利用いただくにはログインが必要です。ログインしますか？',
+    ok: 'はい',
+    profile: 'プロフィール', changeAvatar: '写真変更', changeNickname: 'ニックネーム変更', phone: '電話番号', email: 'メール', changePwd: 'パスワード変更', oldPwd: '現在のパスワード', newPwd: '新しいパスワード', pwdChanged: 'パスワードを変更しました ✨', profileSaved: '保存しました ✨', loginFirst: 'ログインしてください',
     timeJustNow: 'たった今', timeMin: '分', timeHour: '時間', timeDay: '日',
     story1: '初めての日 ☀️', story2: '一緒に 🌙', story3: 'これから 🌸',
     story1Content: '君を初めて見た日\n風が気持ちよかったよ 💓',
@@ -584,6 +725,9 @@ const i18n = {
     myPrivate: '我的私密记录', save: '保存', editMsg: '编辑', deleteMsg: '收起',
     deleteConfirm: '要把这条记录收起来吗？',
     loginOk: '欢迎 ✨', registerOk: '注册成功 ✨', authFail: '请重试',
+    loginRequiredPopup: '该页面需要登录才能访问。是否立即登录？',
+    ok: '确定',
+    profile: '个人主页', changeAvatar: '更换头像', changeNickname: '修改昵称', phone: '手机号', email: '邮箱', changePwd: '修改密码', oldPwd: '当前密码', newPwd: '新密码', pwdChanged: '密码修改成功 ✨', profileSaved: '保存成功 ✨', loginFirst: '请先登录',
     timeJustNow: '刚刚', timeMin: '分钟', timeHour: '小时', timeDay: '天',
     story1: '初次相遇 ☀️', story2: '在一起的时光 🌙', story3: '我们的未来 🌸',
     story1Content: '第一次见到你的那天\n风很舒服 💓',
@@ -618,6 +762,25 @@ const authPassword = ref('')
 const authNickname = ref('')
 const authError = ref('')
 const authLoading = ref(false)
+const avatarInput = ref(null)
+
+// Profile edit
+const editNickname = ref('')
+const editPhone = ref('')
+const editEmail = ref('')
+const oldPassword = ref('')
+const newPassword = ref('')
+const savingProfile = ref(false)
+const changingPwd = ref(false)
+const profileTab = ref('photos')
+const profilePhotoModal = ref(null)
+
+// Computed: my content
+const myPhotos = computed(() => photos.value.filter(p => p.user_id === currentUser.value?.id))
+const myMessages = computed(() => messages.value.filter(m => m.user_id === currentUser.value?.id))
+
+// Login requirement popup
+const showLoginRequiredPopup = ref(false)
 
 // Message edit/delete/private
 const editingMsgId = ref(null)
@@ -641,8 +804,10 @@ const uploading = ref(false)
 const showCommentsPanel = ref(false)
 const currentCommentPhotoId = ref(null)
 const commentsList = ref([])
-const commentNickname = ref('')
+const commentNickname = ref(localStorage.getItem('diary_comment_nickname') || '')
 const commentText = ref('')
+const editingCommentId = ref(null)
+const editingCommentContent = ref('')
 
 // Messages
 const msgNickname = ref('')
@@ -695,6 +860,7 @@ const stories = ref([
 // Nav
 const navItems = [
   { id: 'home', icon: '🏠' },
+  { id: 'profile', icon: '👤' },
   { id: 'gallery', icon: '📷' },
   { id: 'messages', icon: '💬' },
 ]
@@ -748,6 +914,7 @@ async function handleAuth() {
       if (res.data.code === 200) {
         localStorage.setItem('diary_token', res.data.token)
         currentUser.value = res.data.user
+        initProfileEdit()
         showToast(t('registerOk'))
         showLoginModal.value = false
         authUsername.value = ''
@@ -762,6 +929,7 @@ async function handleAuth() {
       if (res.data.code === 200) {
         localStorage.setItem('diary_token', res.data.token)
         currentUser.value = res.data.user
+        initProfileEdit()
         showToast(t('loginOk'))
         showLoginModal.value = false
         authUsername.value = ''
@@ -782,8 +950,21 @@ function logout() {
   localStorage.removeItem('diary_token')
   currentUser.value = null
   showUserMenu.value = false
+  editNickname.value = ''
+  editPhone.value = ''
+  editEmail.value = ''
+  oldPassword.value = ''
+  newPassword.value = ''
   showToast(t('logout'))
   fetchData()
+}
+
+function initProfileEdit() {
+  if (currentUser.value) {
+    editNickname.value = currentUser.value.nickname || ''
+    editPhone.value = currentUser.value.phone || ''
+    editEmail.value = currentUser.value.email || ''
+  }
 }
 
 async function checkAuth() {
@@ -793,6 +974,7 @@ async function checkAuth() {
       const res = await api.getMe(token)
       if (res.data.code === 200) {
         currentUser.value = res.data.user
+        initProfileEdit()
       } else {
         localStorage.removeItem('diary_token')
       }
@@ -802,12 +984,53 @@ async function checkAuth() {
   }
 }
 
+// Handle navigation with login check
+function navigateTo(section) {
+  // Define which sections require login
+  const restrictedSections = ['gallery', 'messages']
+  
+  // Check if the section requires login and user is not logged in
+  if (restrictedSections.includes(section) && !currentUser.value) {
+    // Show login required popup first
+    showLoginRequiredPopup.value = true
+    return false
+  }
+  
+  // If allowed, change the active section
+  activeSection.value = section
+  return true
+}
+
+// Handle login required popup confirmation
+function onLoginRequiredConfirm() {
+  showLoginRequiredPopup.value = false
+  // After user confirms, show login modal
+  setTimeout(() => {
+    showLoginModal.value = true
+  }, 300)
+}
+
+// Handle login required popup cancel
+function onLoginRequiredCancel() {
+  showLoginRequiredPopup.value = false
+  // Keep user on home page
+  activeSection.value = 'home'
+}
+
 function isMsgOwner(msg) {
   return currentUser.value && msg.user_id && msg.user_id === currentUser.value.id
 }
 
 function isPhotoOwner(photo) {
   return currentUser.value && photo.user_id && photo.user_id === currentUser.value.id
+}
+
+function openPhotoDetail(photo) {
+  profilePhotoModal.value = photo
+}
+
+function isCommentOwner(comment) {
+  return currentUser.value && comment.nickname === (currentUser.value.nickname || currentUser.value.username)
 }
 
 function startEditPhoto(photo) {
@@ -994,7 +1217,11 @@ async function quickComment(photo, event) {
   if (!input || !input.value.trim()) return
   try {
     const fd = new FormData()
-    fd.append('nickname', commentNickname.value || t('anonymous'))
+    const nickname = currentUser.value ? (currentUser.value.nickname || currentUser.value.username) : (commentNickname.value || t('anonymous'))
+    fd.append('nickname', nickname)
+    if (!currentUser.value && commentNickname.value) {
+      localStorage.setItem('diary_comment_nickname', commentNickname.value)
+    }
     fd.append('content', input.value.trim())
     const res = await api.addComment(photo.id, fd)
     if (res.data.code === 200) {
@@ -1013,7 +1240,11 @@ async function submitComment() {
   if (!commentText.value.trim() || !currentCommentPhotoId.value) return
   try {
     const fd = new FormData()
-    fd.append('nickname', commentNickname.value || t('anonymous'))
+    const nickname = currentUser.value ? (currentUser.value.nickname || currentUser.value.username) : (commentNickname.value || t('anonymous'))
+    fd.append('nickname', nickname)
+    if (!currentUser.value && commentNickname.value) {
+      localStorage.setItem('diary_comment_nickname', commentNickname.value)
+    }
     fd.append('content', commentText.value.trim())
     const res = await api.addComment(currentCommentPhotoId.value, fd)
     if (res.data.code === 200) {
@@ -1025,6 +1256,49 @@ async function submitComment() {
   } catch (e) {
     showToast(t('toastMsgFail'), 'error')
   }
+}
+
+function startEditComment(comment) {
+  editingCommentId.value = comment.id
+  editingCommentContent.value = comment.content
+}
+
+async function confirmEditComment(commentId) {
+  if (!editingCommentContent.value.trim()) return
+  const token = api.getToken()
+  if (!token) return
+  try {
+    const fd = new FormData()
+    fd.append('content', editingCommentContent.value.trim())
+    fd.append('token', token)
+    const res = await api.updateComment(commentId, fd)
+    if (res.data.code === 200) {
+      showToast(t('save'))
+      editingCommentId.value = null
+      openComments({ id: currentCommentPhotoId.value })
+      fetchPhotos()
+    }
+  } catch (e) {
+    showToast(t('authFail'), 'error')
+  }
+}
+
+async function handleDeleteComment(commentId) {
+  await showConfirm(t('deleteConfirm'), async () => {
+    const token = api.getToken()
+    if (!token) return
+    try {
+      const res = await api.deleteComment(commentId, token)
+      if (res.data.code === 200) {
+        showToast('Deleted')
+        openComments({ id: currentCommentPhotoId.value })
+        fetchPhotos()
+        fetchStats()
+      }
+    } catch (e) {
+      showToast(t('authFail'), 'error')
+    }
+  })
 }
 
 // Upload
@@ -1087,6 +1361,82 @@ async function confirmUpload() {
   } finally {
     uploading.value = false
   }
+}
+
+// Avatar upload
+async function handleAvatarUpload(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  try {
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('token', api.getToken())
+    const res = await api.uploadAvatar(fd)
+    if (res.data.code === 200) {
+      currentUser.value = { ...currentUser.value, avatar: res.data.filename }
+      showToast('✓')
+    }
+  } catch (e) {
+    showToast('✗', 'error')
+  }
+  e.target.value = ''
+}
+
+async function saveProfile() {
+  savingProfile.value = true
+  try {
+    const fd = new FormData()
+    fd.append('token', api.getToken())
+    fd.append('nickname', editNickname.value)
+    fd.append('phone', editPhone.value)
+    fd.append('email', editEmail.value)
+    const res = await api.updateProfile(fd)
+    if (res.data.code === 200) {
+      currentUser.value = { ...currentUser.value, ...res.data.user }
+      showToast(t('profileSaved'))
+    }
+  } catch (e) {
+    showToast(t('authFail'), 'error')
+  } finally {
+    savingProfile.value = false
+  }
+}
+
+async function changePassword() {
+  if (!oldPassword.value || !newPassword.value) return
+  changingPwd.value = true
+  try {
+    const fd = new FormData()
+    fd.append('token', api.getToken())
+    fd.append('old_password', oldPassword.value)
+    fd.append('new_password', newPassword.value)
+    const res = await api.changePassword(fd)
+    if (res.data.code === 200) {
+      showToast(t('pwdChanged'))
+      oldPassword.value = ''
+      newPassword.value = ''
+    }
+  } catch (e) {
+    showToast(e.response?.data?.detail || t('authFail'), 'error')
+  } finally {
+    changingPwd.value = false
+  }
+}
+
+// Avatar helpers
+const UPLOAD_BASE = 'http://localhost:520/uploads/'
+function getAvatarUrl(avatar) {
+  return avatar ? (UPLOAD_BASE + avatar) : null
+}
+function getAvatarStyle(user) {
+  if (user?.avatar) {
+    return {
+      backgroundImage: `url(${UPLOAD_BASE}${user.avatar})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center'
+    }
+  }
+  return {}
 }
 
 // Submit message
@@ -1241,11 +1591,14 @@ onUnmounted(() => {
 /* ============ RESET ============ */
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
-  --bg:#faf8f5;--bg-card:#fff;--text:#1a1a1a;--text-light:#8e8e8e;
-  --accent:#e8a0bf;--accent-light:#fce4ec;--accent-soft:#f8d0e0;
-  --border:#efefef;--shadow:0 1px 12px rgba(0,0,0,0.06);
-  --shadow-lg:0 8px 30px rgba(0,0,0,0.1);
-  --radius:14px;--radius-sm:8px;
+  --bg:#fdfbf7;--bg-card:#ffffff;--text:#2d2d2d;--text-light:#9a9a9a;
+  --accent:#e87a9f;--accent-light:#fff5f8;--accent-soft:#fde8ef;
+  --accent-deep:#d4617e;--gradient-soft:linear-gradient(135deg, #fff5f8 0%, #fef0f5 50%, #f8e8ff 100%);
+  --gradient-accent:linear-gradient(135deg, #e87a9f, #f5a0b8);
+  --border:#f0ebe6;--shadow:0 2px 16px rgba(232,122,159,0.08);
+  --shadow-md:0 4px 24px rgba(232,122,159,0.12);
+  --shadow-lg:0 8px 40px rgba(232,122,159,0.16);
+  --radius:16px;--radius-sm:10px;--radius-lg:20px;
   --transition:0.3s cubic-bezier(0.4,0,0.2,1);
 }
 html{scroll-behavior:smooth;-webkit-tap-highlight-color:transparent}
@@ -1254,7 +1607,7 @@ body{
   background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh;overflow-x:hidden;
   transition:transform 0.3s ease;
 }
-.app{max-width:480px;margin:0 auto;min-height:100vh;position:relative;padding-bottom:70px}
+.app{max-width:480px;margin:0 auto;min-height:100vh;position:relative;overflow:hidden}
 
 /* ============ PETALS ============ */
 .petals{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
@@ -1269,248 +1622,382 @@ body{
 
 /* ============ HEADER ============ */
 .header{
-  position:sticky;top:0;z-index:100;
-  background:rgba(250,248,245,0.9);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  position:absolute;top:0;left:0;right:0;z-index:10;
+  background:rgba(253,251,247,0.92);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
   border-bottom:1px solid var(--border);
+  box-shadow:0 1px 0 rgba(0,0,0,0.03);
 }
-.header-inner{display:flex;align-items:center;justify-content:space-between;padding:12px 16px}
-.logo{display:flex;align-items:center;cursor:pointer;user-select:none}
-.logo-img{height:28px;width:auto}
-.header-actions{display:flex;align-items:center;gap:8px}
+.header-inner{display:flex;align-items:center;justify-content:space-between;padding:14px 20px}
+.logo{display:flex;align-items:center;cursor:pointer;user-select:none;transition:transform 0.2s ease}
+.logo:hover{transform:scale(1.02)}
+.logo-img{height:30px;width:auto;filter:drop-shadow(0 2px 4px rgba(232,122,159,0.2))}
+.header-actions{display:flex;align-items:center;gap:10px}
 
 /* Login trigger */
-.login-trigger{border:none;background:transparent;cursor:pointer;padding:4px}
+.login-trigger{border:none;background:transparent;cursor:pointer;padding:4px;border-radius:50%;transition:transform 0.2s ease}
+.login-trigger:hover{transform:scale(1.08)}
 .login-icon{
-  width:28px;height:28px;border-radius:50%;background:var(--accent-light);
+  width:32px;height:32px;border-radius:50%;background:var(--gradient-soft);
   display:flex;align-items:center;justify-content:center;font-size:14px;
+  box-shadow:0 2px 8px rgba(232,122,159,0.15);
+  transition:all 0.2s ease;
 }
-.login-icon.logged{background:var(--accent);color:#fff;font-weight:600;font-size:12px}
+.login-icon:hover{box-shadow:0 4px 12px rgba(232,122,159,0.25)}
+.login-icon.logged{background:var(--gradient-accent);color:#fff;font-weight:600;font-size:12px;box-shadow:0 4px 12px rgba(232,122,159,0.3)}
 .user-menu{position:relative}
 
 /* User dropdown */
 .user-dropdown{
-  position:absolute;top:36px;right:0;z-index:200;
+  position:absolute;top:40px;right:0;z-index:200;
   background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);
-  box-shadow:var(--shadow-lg);padding:8px 0;min-width:160px;
+  box-shadow:var(--shadow-lg);padding:10px 0;min-width:170px;
+  animation:dropdownIn 0.2s ease;
 }
-.ud-name{padding:8px 16px;font-size:13px;font-weight:600;border-bottom:1px solid var(--border);margin-bottom:4px}
+@keyframes dropdownIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.ud-name{padding:10px 18px;font-size:14px;font-weight:600;color:var(--text);border-bottom:1px solid var(--border);margin-bottom:6px}
 .ud-item{
-  display:block;width:100%;padding:8px 16px;border:none;background:transparent;
+  display:block;width:100%;padding:10px 18px;border:none;background:transparent;
   font-size:13px;text-align:left;cursor:pointer;font-family:inherit;color:var(--text);
+  transition:all 0.2s ease;
 }
-.ud-item:hover{background:var(--accent-light)}
-.ud-logout{color:#e74c3c;border-top:1px solid var(--border);margin-top:4px;padding-top:12px}
+.ud-item:hover{background:var(--accent-light);padding-left:22px}
+.ud-logout{color:var(--accent-deep);border-top:1px solid var(--border);margin-top:6px;padding-top:14px}
 
 /* Login modal */
 .login-modal{
-  background:var(--bg-card);border-radius:var(--radius);padding:24px;width:100%;max-width:340px;box-shadow:var(--shadow-lg);
+  background:var(--bg-card);border-radius:var(--radius-lg);padding:28px;width:100%;max-width:360px;
+  box-shadow:var(--shadow-lg);border:1px solid var(--border);
+  animation:modalIn 0.3s ease;
 }
-.login-tabs{display:flex;margin-bottom:18px;border-bottom:1px solid var(--border)}
+@keyframes modalIn{from{opacity:0;transform:scale(0.95) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.login-tabs{display:flex;margin-bottom:22px;gap:4px;background:var(--bg);padding:4px;border-radius:12px}
 .login-tab{
-  flex:1;padding:10px;border:none;background:transparent;font-size:14px;
+  flex:1;padding:12px;border:none;background:transparent;font-size:14px;
   cursor:pointer;font-family:inherit;color:var(--text-light);transition:var(--transition);
-  border-bottom:2px solid transparent;
+  border-radius:10px;
 }
-.login-tab.active{color:var(--text);border-bottom-color:var(--accent);font-weight:600}
-.auth-error{font-size:12px;color:#e74c3c;margin-bottom:12px;text-align:center}
+.login-tab.active{background:var(--bg-card);color:var(--accent);font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.06)}
+.auth-error{font-size:12px;color:var(--accent-deep);margin-bottom:14px;text-align:center;padding:8px 12px;background:#fff5f8;border-radius:8px}
 
 /* Language */
-.lang-switcher{display:flex;gap:1px;background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:2px}
+.lang-switcher{display:flex;gap:2px;background:var(--bg);border:1px solid var(--border);border-radius:18px;padding:3px}
 .lang-btn{
-  padding:3px 8px;border:none;background:transparent;border-radius:14px;
-  font-size:10px;font-family:inherit;cursor:pointer;color:var(--text-light);
-  transition:var(--transition);white-space:nowrap;
+  padding:4px 10px;border:none;background:transparent;border-radius:14px;
+  font-size:11px;font-family:inherit;cursor:pointer;color:var(--text-light);
+  transition:var(--transition);white-space:nowrap;font-weight:500;
 }
-.lang-btn.active{background:var(--accent);color:#fff}
+.lang-btn.active{background:var(--gradient-accent);color:#fff;box-shadow:0 2px 8px rgba(232,122,159,0.3)}
 
 /* ============ BOTTOM NAV ============ */
 .bottom-nav{
-  position:fixed;bottom:0;left:50%;transform:translateX(-50%);
-  width:100%;max-width:480px;z-index:100;
-  background:rgba(255,255,255,0.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  position:absolute;bottom:0;left:0;right:0;z-index:10;
+  background:rgba(255,255,255,0.98);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);
   border-top:1px solid var(--border);
-  display:flex;justify-content:space-around;padding:8px 0 env(safe-area-inset-bottom,8px);
+  display:flex;justify-content:space-around;padding:10px 0 env(safe-area-inset-bottom,12px);
+  box-shadow:0 -4px 20px rgba(0,0,0,0.04);
 }
 .bnav-btn{
-  display:flex;flex-direction:column;align-items:center;gap:2px;
-  padding:4px 12px;border:none;background:transparent;cursor:pointer;
-  color:var(--text-light);transition:var(--transition);font-family:inherit;
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:6px 20px;border:none;background:transparent;cursor:pointer;
+  color:var(--text-light);transition:all 0.25s ease;font-family:inherit;
+  border-radius:16px;
 }
-.bnav-btn.active .bnav-icon{transform:scale(1.15)}
-.bnav-btn.active .bnav-label{color:var(--text);font-weight:500}
-.bnav-icon{font-size:20px;transition:var(--transition)}
-.bnav-label{font-size:9px;letter-spacing:0.3px}
+.bnav-btn:hover{background:var(--accent-light)}
+.bnav-btn.active .bnav-icon{transform:scale(1.2)}
+.bnav-btn.active .bnav-label{color:var(--accent);font-weight:600}
+.bnav-icon{font-size:22px;transition:all 0.25s cubic-bezier(0.34,1.56,0.64,1)}
+.bnav-label{font-size:10px;letter-spacing:0.4px}
 
 /* ============ MAIN ============ */
-.main{padding:0 0 20px;position:relative;z-index:1}
+.main{padding:60px 0 80px;position:relative;z-index:1}
 .section{animation:fadeIn 0.4s ease}
 @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 
 /* ============ PROFILE HEADER ============ */
-.profile-header{display:flex;align-items:center;gap:20px;padding:24px 20px 16px}
+.profile-header{display:flex;align-items:center;gap:20px;padding:28px 20px 20px}
 .profile-avatar-wrap{position:relative;flex-shrink:0}
 .profile-avatar{
-  width:72px;height:72px;border-radius:50%;
-  background:linear-gradient(135deg,var(--accent-light),var(--accent-soft));
-  display:flex;align-items:center;justify-content:center;font-size:32px;
-  cursor:pointer;transition:var(--transition);z-index:2;position:relative;
+  width:76px;height:76px;border-radius:50%;
+  background:var(--gradient-soft);
+  display:flex;align-items:center;justify-content:center;font-size:34px;
+  cursor:pointer;transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);z-index:2;position:relative;
+  box-shadow:0 4px 16px rgba(232,122,159,0.2);
 }
-.profile-avatar:active{transform:scale(0.9)}
+.profile-avatar:hover{transform:scale(1.05);box-shadow:0 6px 20px rgba(232,122,159,0.3)}
+.profile-avatar:active{transform:scale(0.95)}
+.profile-avatar .avatar-edit-hint{
+  position:absolute;bottom:0;right:0;
+  width:22px;height:22px;border-radius:50%;
+  background:var(--gradient-accent);color:#fff;
+  font-size:11px;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 8px rgba(232,122,159,0.4);
+  opacity:0;transition:opacity 0.2s;
+}
+.profile-avatar:hover .avatar-edit-hint{opacity:1}
+.profile-avatar.no-avatar{cursor:default}
 .avatar-ring{
-  position:absolute;inset:-4px;border-radius:50%;
-  border:2px solid transparent;
-  background:linear-gradient(135deg,#f09,#f06,#ff6,#f90,#f09) border-box;
+  position:absolute;inset:-5px;border-radius:50%;
+  border:3px solid transparent;
+  background:linear-gradient(135deg,#f5a0b8,#e87a9f,#d4617e,#f5a0b8) border-box;
   -webkit-mask:linear-gradient(#fff 0 0) padding-box,linear-gradient(#fff 0 0);
   -webkit-mask-composite:xor;mask-composite:exclude;
-  animation:ring-rotate 3s linear infinite;
+  animation:ring-rotate 4s linear infinite;
 }
 @keyframes ring-rotate{to{filter:hue-rotate(360deg)}}
 .profile-info{flex:1;min-width:0}
-.profile-name{font-size:20px;font-weight:600;margin-bottom:2px}
-.profile-bio{font-size:13px;color:var(--text-light)}
+.profile-name{font-size:22px;font-weight:700;margin-bottom:4px;letter-spacing:-0.5px}
+.profile-bio{font-size:13px;color:var(--text-light);font-weight:400}
 
 /* Stats */
-.profile-stats{display:flex;align-items:center;justify-content:space-around;padding:0 20px 20px}
-.pstat{text-align:center;cursor:pointer;transition:var(--transition)}
+.profile-stats{
+  display:flex;align-items:center;justify-content:space-around;
+  padding:16px 24px 24px;margin:0 20px;
+  background:var(--bg-card);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--border);
+}
+.pstat{text-align:center;cursor:pointer;transition:all 0.25s ease;padding:4px 12px;border-radius:12px}
+.pstat:hover{background:var(--accent-light)}
 .pstat:active{transform:scale(0.95)}
-.pstat-num{display:block;font-size:20px;font-weight:700;color:var(--text)}
-.pstat-label{font-size:11px;color:var(--text-light)}
-.pstat-divider{width:1px;height:30px;background:var(--border)}
+.pstat-num{display:block;font-size:22px;font-weight:700;color:var(--text)}
+.pstat-label{font-size:11px;color:var(--text-light);margin-top:2px}
+.pstat-divider{width:1px;height:32px;background:var(--border)}
+
+/* ============ PROFILE FORM ============ */
+.profile-login-required{
+  text-align:center;padding:60px 20px;
+}
+.profile-login-required p{color:var(--text-light);margin-bottom:20px;font-size:15px}
+.profile-form{
+  padding:20px;max-width:480px;margin:0 auto;
+}
+.pf-avatar-section{
+  display:flex;flex-direction:column;align-items:center;gap:12px;margin-bottom:28px;
+}
+.pf-avatar-preview{
+  width:100px;height:100px;border-radius:50%;
+  background:var(--gradient-soft);
+  display:flex;align-items:center;justify-content:center;
+  font-size:40px;
+  background-size:cover;background-position:center;
+  box-shadow:0 4px 16px rgba(232,122,159,0.2);
+}
+.pf-avatar-btn{font-size:13px;padding:8px 20px}
+.pf-field{margin-bottom:20px}
+.pf-label{font-size:12px;color:var(--text-light);margin-bottom:6px;display:block}
+.pf-value{font-size:15px;color:var(--text);padding:10px 14px;background:var(--bg-card);border-radius:var(--radius-sm);border:1px solid var(--border)}
+.pf-input{
+  width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);
+  background:var(--bg);font-size:14px;color:var(--text);
+  transition:border-color 0.2s;
+  box-sizing:border-box;
+}
+.pf-input:focus{outline:none;border-color:var(--accent)}
+.pf-save-btn{width:100%;margin-top:8px;padding:14px}
+.pf-divider{height:1px;background:var(--border);margin:28px 0}
+.pf-section-title{font-size:16px;font-weight:600;margin-bottom:16px;color:var(--text)}
+.profile-tabs{display:flex;padding:0 20px;gap:8px;margin-bottom:20px}
+.ptab{
+  flex:1;padding:10px;border:none;background:var(--bg-card);border-radius:var(--radius-sm);
+  font-size:14px;font-weight:500;color:var(--text-light);cursor:pointer;transition:all 0.2s;
+}
+.ptab.active{background:var(--gradient-accent);color:#fff}
+.profile-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:0}
+.pg-item{aspect-ratio:1;overflow:hidden;cursor:pointer}
+.pg-item img{width:100%;height:100%;object-fit:cover;transition:transform 0.3s}
+.pg-item:hover img{transform:scale(1.05)}
+.profile-empty{text-align:center;padding:40px 20px;color:var(--text-light);font-size:14px}
+.lg-avatar{width:80px;height:80px;font-size:32px}
+.lg-avatar:hover .avatar-edit-hint{opacity:1}
+
+/* Profile Photo Modal */
+.ppm-wrap{
+  background:var(--bg-card);border-radius:var(--radius-lg);overflow:hidden;
+  max-width:480px;width:90vw;max-height:90vh;display:flex;flex-direction:column;
+  box-shadow:0 20px 60px rgba(0,0,0,0.3);
+}
+.ppm-close{
+  position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;
+  background:rgba(0,0,0,0.5);color:#fff;border:none;font-size:20px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;z-index:10;
+}
+.ppm-close:hover{background:rgba(0,0,0,0.7)}
+.ppm-img{width:100%;max-height:60vh;object-fit:contain;background:#000}
+.ppm-info{padding:16px}
+.ppm-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.ppm-author{font-weight:600;font-size:14px}
+.ppm-location{font-size:12px;color:var(--text-light)}
+.ppm-caption{font-size:14px;line-height:1.5;margin-bottom:12px}
+.ppm-stats{font-size:13px;color:var(--text-light);display:flex;gap:16px}
+.ppm-actions{display:flex;gap:8px;margin-top:12px}
+.ppm-btn{
+  padding:8px 16px;border-radius:20px;border:none;background:var(--bg);cursor:pointer;
+  font-size:14px;transition:all 0.2s;
+}
+.ppm-btn:hover{background:var(--accent-light)}
+.ppm-delete:hover{background:#ffe0e0}
+.sm-avatar{width:36px;height:36px}
 
 /* ============ STORIES ============ */
-.stories-bar{display:flex;gap:14px;padding:8px 20px 20px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.stories-bar{
+  display:flex;gap:16px;padding:20px;
+  overflow-x:auto;-webkit-overflow-scrolling:touch;
+  scroll-snap-type:x mandatory;
+}
 .stories-bar::-webkit-scrollbar{display:none}
-.story-item{display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;flex-shrink:0}
+.story-item{
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  cursor:pointer;flex-shrink:0;scroll-snap-align:start;
+  transition:transform 0.2s ease;
+}
+.story-item:hover{transform:scale(1.05)}
 .story-ring{
-  padding:3px;border-radius:50%;
-  background:linear-gradient(135deg,#f09,#f06,#ff6);
+  padding:4px;border-radius:50%;
+  background:linear-gradient(135deg,#f5a0b8,#e87a9f,#d4617e);
+  box-shadow:0 4px 12px rgba(232,122,159,0.25);
 }
-.story-item.viewed .story-ring{background:var(--border)}
+.story-item.viewed .story-ring{background:var(--border);box-shadow:none}
 .story-thumb{
-  width:56px;height:56px;border-radius:50%;
+  width:58px;height:58px;border-radius:50%;
   background:var(--bg);display:flex;align-items:center;justify-content:center;
-  font-size:24px;
+  font-size:26px;
 }
-.story-name{font-size:10px;color:var(--text-light);max-width:56px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.story-name{font-size:11px;color:var(--text-light);max-width:58px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* ============ FEATURE CARD ============ */
 .feature-card{
-  margin:0 20px 24px;padding:24px;
-  background:linear-gradient(135deg,#fff5f8,#fff0f5,#f5f0ff);
-  border-radius:var(--radius);cursor:pointer;
-  transition:var(--transition);position:relative;overflow:hidden;
+  margin:0 20px 28px;padding:28px;
+  background:var(--gradient-soft);
+  border-radius:var(--radius-lg);cursor:pointer;
+  transition:all 0.3s ease;position:relative;overflow:hidden;
+  border:1px solid rgba(232,122,159,0.1);
+  box-shadow:var(--shadow);
 }
+.feature-card::before{
+  content:'';position:absolute;top:-50%;right:-50%;
+  width:100%;height:100%;background:radial-gradient(circle,rgba(255,255,255,0.3) 0%,transparent 60%);
+  pointer-events:none;
+}
+.feature-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
 .feature-card:active{transform:scale(0.98)}
-.feature-icon{font-size:28px;margin-bottom:12px}
-.feature-text{font-size:16px;line-height:1.6;margin-bottom:4px}
-.feature-text.accent{color:var(--accent);font-weight:500;font-size:18px}
-.feature-dots{display:flex;gap:6px;margin-top:16px;justify-content:center}
-.dot{width:6px;height:6px;border-radius:50%;background:var(--accent-soft);transition:var(--transition)}
-.dot.active{background:var(--accent);width:18px;border-radius:3px}
+.feature-icon{font-size:32px;margin-bottom:14px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.1))}
+.feature-text{font-size:16px;line-height:1.7;margin-bottom:6px}
+.feature-text.accent{color:var(--accent-deep);font-weight:600;font-size:18px}
+.feature-dots{display:flex;gap:8px;margin-top:18px;justify-content:center}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--accent-soft);transition:all 0.3s ease}
+.dot.active{background:var(--accent);width:20px;border-radius:4px}
 
 /* ============ SECTION HEAD ============ */
-.section-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 12px}
-.section-head-actions{display:flex;align-items:center;gap:8px}
+.section-head{display:flex;align-items:center;justify-content:space-between;padding:20px 20px 14px}
+.section-head-actions{display:flex;align-items:center;gap:10px}
 .inline-search{
-  width:120px;padding:6px 10px;border:1px solid var(--border);border-radius:20px;
-  font-size:12px;font-family:inherit;background:var(--bg);color:var(--text);outline:none;
-  transition:var(--transition);
+  width:130px;padding:8px 14px;border:1px solid var(--border);border-radius:20px;
+  font-size:13px;font-family:inherit;background:var(--bg-card);color:var(--text);outline:none;
+  transition:all 0.3s ease;
 }
-.inline-search:focus{border-color:var(--accent);width:160px}
+.inline-search:focus{border-color:var(--accent);width:170px;box-shadow:0 0 0 3px rgba(232,122,159,0.1)}
 .inline-search::placeholder{color:var(--text-light)}
-.section-title{font-size:18px;font-weight:600}
+.section-title{font-size:20px;font-weight:700;letter-spacing:-0.3px}
 .msg-badge{
-  background:var(--accent);color:#fff;font-size:11px;
-  padding:2px 10px;border-radius:12px;font-weight:500;
+  background:var(--gradient-accent);color:#fff;font-size:11px;
+  padding:4px 12px;border-radius:14px;font-weight:600;
+  box-shadow:0 2px 8px rgba(232,122,159,0.25);
 }
 
 /* Upload */
 .upload-btn{
-  width:36px;height:36px;display:flex;align-items:center;justify-content:center;
-  background:var(--accent-light);border:1px solid var(--accent-soft);border-radius:50%;
-  cursor:pointer;transition:var(--transition);
+  width:38px;height:38px;display:flex;align-items:center;justify-content:center;
+  background:var(--gradient-soft);border:1px solid rgba(232,122,159,0.2);border-radius:50%;
+  cursor:pointer;transition:all 0.25s ease;
+  box-shadow:0 2px 8px rgba(232,122,159,0.15);
 }
-.upload-btn:active{transform:scale(0.9)}
-.upload-icon{font-size:20px;font-weight:600;color:var(--accent)}
+.upload-btn:hover{transform:scale(1.08);box-shadow:0 4px 12px rgba(232,122,159,0.25)}
+.upload-btn:active{transform:scale(0.95)}
+.upload-icon{font-size:22px;font-weight:600;color:var(--accent)}
 .upload-location{font-size:12px;color:var(--text-light);margin:-8px 0 14px;display:flex;align-items:center;gap:4px}
 
 /* ============ INSTAGRAM FEED ============ */
-.feed{padding:0 0 20px}
+.feed{padding:0 0 24px}
 
 .post-card{
-  background:var(--bg-card);border-bottom:1px solid var(--border);
-  margin-bottom:4px;
+  background:var(--bg-card);border:1px solid var(--border);
+  margin:0 16px 12px;border-radius:var(--radius);
+  box-shadow:var(--shadow);overflow:hidden;
+  transition:all 0.25s ease;
 }
+.post-card:hover{box-shadow:var(--shadow-md)}
+.post-card.post-private{border-left:4px solid var(--accent)}
 
 .post-header{
-  display:flex;align-items:center;gap:10px;padding:10px 14px;
+  display:flex;align-items:center;gap:12px;padding:12px 16px;
 }
 .post-avatar{
-  width:32px;height:32px;border-radius:50%;
-  background:linear-gradient(135deg,var(--accent-light),var(--accent-soft));
+  width:36px;height:36px;border-radius:50%;
+  background:var(--gradient-soft);
   display:flex;align-items:center;justify-content:center;font-size:16px;
+  box-shadow:0 2px 8px rgba(232,122,159,0.15);
+  background-size:cover;background-position:center;
 }
+.post-avatar.no-avatar-text span{display:none}
 .post-user-info{flex:1}
-.post-username{font-size:13px;font-weight:600}
-.post-location{font-size:11px;color:var(--text-light);margin-left:10px}
-.post-more{
-  border:none;background:transparent;font-size:16px;cursor:pointer;
-  color:var(--text-light);padding:4px 8px;
-}
+.post-username{font-size:14px;font-weight:600}
+.post-location{font-size:11px;color:var(--text-light);margin-left:8px}
+.post-private-badge{margin-left:6px}
 
 /* Post owner actions */
-.post-owner-actions{display:flex;gap:2px}
+.post-owner-actions{display:flex;gap:4px}
 .post-action-sm{
-  border:none;background:transparent;font-size:13px;cursor:pointer;
-  padding:4px;opacity:0.6;transition:var(--transition);border-radius:4px;
+  border:none;background:transparent;font-size:14px;cursor:pointer;
+  padding:6px;opacity:0.6;transition:all 0.2s ease;border-radius:8px;
 }
-.post-action-sm:hover{opacity:1;background:var(--accent-light)}
-.post-private{border-left:3px solid var(--accent)}
-.photo-edit-wrap{background:var(--bg);padding:8px 0}
+.post-action-sm:hover{opacity:1;background:var(--accent-light);transform:scale(1.1)}
+.photo-edit-wrap{background:var(--bg);padding:12px 0}
 
 /* Post image */
-.post-image-wrap{position:relative;width:100%;aspect-ratio:1;overflow:hidden;background:#f5f5f5}
-.post-image-wrap img{width:100%;height:100%;object-fit:cover}
+.post-image-wrap{position:relative;width:100%;aspect-ratio:1;overflow:hidden;background:#fafafa}
+.post-image-wrap img{width:100%;height:100%;object-fit:cover;transition:transform 0.3s ease}
+.post-card:hover .post-image-wrap img{transform:scale(1.02)}
 
 /* Double tap heart */
 .double-tap-heart{
   position:absolute;top:50%;left:50%;
   transform:translate(-50%,-50%) scale(0);
-  font-size:80px;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.3));
+  font-size:90px;filter:drop-shadow(0 4px 12px rgba(232,122,159,0.4));
   pointer-events:none;
 }
-.heart-pop-enter-active{animation:heartPop 0.8s ease forwards}
+.heart-pop-enter-active{animation:heartPop 0.9s ease forwards}
 @keyframes heartPop{
   0%{transform:translate(-50%,-50%) scale(0);opacity:1}
-  15%{transform:translate(-50%,-50%) scale(1.3);opacity:1}
+  15%{transform:translate(-50%,-50%) scale(1.4);opacity:1}
   30%{transform:translate(-50%,-50%) scale(1);opacity:1}
   80%{transform:translate(-50%,-50%) scale(1);opacity:1}
-  100%{transform:translate(-50%,-50%) scale(1.2);opacity:0}
+  100%{transform:translate(-50%,-50%) scale(1.3);opacity:0}
 }
 
 /* Post actions */
-.post-actions{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 4px}
-.post-actions-left{display:flex;gap:14px}
+.post-actions{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 6px}
+.post-actions-left{display:flex;gap:16px}
 .action-btn{
-  border:none;background:transparent;font-size:22px;cursor:pointer;
-  padding:2px;transition:var(--transition);line-height:1;
+  border:none;background:transparent;font-size:24px;cursor:pointer;
+  padding:4px;transition:all 0.2s ease;line-height:1;
 }
-.action-btn:active{transform:scale(0.85)}
-.action-btn.liked{animation:likePop 0.4s ease}
+.action-btn:hover{transform:scale(1.15)}
+.action-btn:active{transform:scale(0.9)}
+.action-btn.liked{animation:likePop 0.4s cubic-bezier(0.34,1.56,0.64,1)}
 @keyframes likePop{0%{transform:scale(1)}50%{transform:scale(1.3)}100%{transform:scale(1)}}
 
 /* Post details */
-.post-likes{padding:0 14px 4px;font-size:13px;font-weight:600}
-.post-caption{padding:0 14px 4px;font-size:13px;line-height:1.5}
+.post-likes{padding:0 16px 6px;font-size:13px;font-weight:600}
+.post-caption{padding:0 16px 6px;font-size:13px;line-height:1.6}
 .post-caption strong{font-weight:600}
-.post-view-comments{padding:2px 14px 2px;font-size:13px;color:var(--text-light);cursor:pointer}
-.post-recent-comments{padding:2px 14px 4px;font-size:13px}
-.post-comment-item{margin-bottom:2px;line-height:1.4}
+.post-view-comments{padding:4px 16px;font-size:13px;color:var(--text-light);cursor:pointer;transition:color 0.2s}
+.post-view-comments:hover{color:var(--accent)}
+.post-recent-comments{padding:4px 16px 6px;font-size:13px}
+.post-comment-item{margin-bottom:3px;line-height:1.5}
 .post-comment-item strong{font-weight:600}
 
 /* Quick comment */
 .post-comment-input{
-  display:flex;align-items:center;gap:8px;padding:8px 14px 12px;
+  display:flex;align-items:center;gap:10px;padding:10px 16px 14px;
+  border-top:1px solid var(--border);
 }
 .quick-comment{
   flex:1;border:none;background:transparent;font-size:13px;
@@ -1519,142 +2006,199 @@ body{
 .quick-comment::placeholder{color:var(--text-light)}
 .comment-send{
   border:none;background:transparent;font-size:13px;font-weight:600;
-  color:var(--accent);cursor:pointer;font-family:inherit;
+  color:var(--accent);cursor:pointer;font-family:inherit;transition:all 0.2s ease;padding:4px 8px;border-radius:8px;
 }
+.comment-send:hover{background:var(--accent-light)}
 
-.post-time{padding:0 14px 12px;font-size:10px;color:var(--text-light);text-transform:uppercase}
+.post-time{padding:4px 16px 14px;font-size:10px;color:var(--text-light);letter-spacing:0.5px}
 
 /* ============ UPLOAD MODAL ============ */
-.modal-overlay{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.2s}
-.modal{background:var(--bg-card);border-radius:var(--radius);padding:20px;width:100%;max-width:340px;box-shadow:var(--shadow-lg)}
-.modal-preview{width:100%;aspect-ratio:1;border-radius:var(--radius-sm);overflow:hidden;margin-bottom:14px}
+.modal-overlay{position:absolute;width:100%;min-height:100vh;top:0;left:0;z-index:9999;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.25s}
+.modal{background:var(--bg-card);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:360px;box-shadow:var(--shadow-lg);border:1px solid var(--border);animation:modalPop 0.3s ease}
+@keyframes modalPop{from{opacity:0;transform:scale(0.92)}to{opacity:1;transform:scale(1)}}
+.modal-preview{width:100%;aspect-ratio:1;border-radius:var(--radius);overflow:hidden;margin-bottom:16px;box-shadow:0 4px 12px rgba(0,0,0,0.08)}
 .modal-preview img{width:100%;height:100%;object-fit:cover}
 .modal-input{
-  width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);
+  width:100%;padding:12px 16px;border:1px solid var(--border);border-radius:var(--radius-sm);
   font-size:14px;font-family:inherit;background:var(--bg);color:var(--text);outline:none;
-  transition:var(--transition);margin-bottom:14px;
+  transition:all 0.25s ease;margin-bottom:14px;
 }
-.modal-input:focus{border-color:var(--accent)}
-.modal-actions{display:flex;gap:10px}
-.btn-cancel,.btn-confirm{flex:1;padding:10px;border:none;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;font-family:inherit;transition:var(--transition)}
+.modal-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(232,122,159,0.1)}
+.modal-input::placeholder{color:var(--text-light)}
+.modal-actions{display:flex;gap:12px}
+.btn-cancel,.btn-confirm{flex:1;padding:12px;border:none;border-radius:var(--radius-sm);font-size:14px;cursor:pointer;font-family:inherit;transition:all 0.25s ease;font-weight:500}
 .btn-cancel{background:var(--bg);color:var(--text-light)}
-.btn-confirm{background:var(--accent);color:#fff}
-.btn-confirm:disabled{opacity:0.6;cursor:not-allowed}
+.btn-cancel:hover{background:var(--border)}
+.btn-confirm{background:var(--gradient-accent);color:#fff;box-shadow:0 4px 12px rgba(232,122,159,0.3)}
+.btn-confirm:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 16px rgba(232,122,159,0.4)}
+.btn-confirm:disabled{opacity:0.5;cursor:not-allowed;transform:none}
 
 /* ============ COMMENTS PANEL ============ */
 .comments-panel{
-  position:fixed;inset:0;z-index:600;background:var(--bg);
+  position:fixed;inset:0;z-index:9998;background:var(--bg);
   display:flex;flex-direction:column;
 }
 .cp-header{
   display:flex;align-items:center;justify-content:space-between;
-  padding:14px 16px;border-bottom:1px solid var(--border);
-}
-.cp-back,.cp-close{border:none;background:transparent;font-size:18px;cursor:pointer;padding:4px 8px}
-.cp-title{font-size:16px;font-weight:600}
-.cp-list{flex:1;overflow-y:auto;padding:12px 16px}
-.cp-item{display:flex;gap:10px;margin-bottom:16px}
-.cp-avatar{
-  width:32px;height:32px;border-radius:50%;background:var(--accent-light);color:var(--accent);
-  display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex-shrink:0;
-}
-.cp-body{flex:1}
-.cp-meta{display:flex;align-items:center;gap:8px;margin-bottom:2px}
-.cp-meta strong{font-size:13px;font-weight:600}
-.cp-time{font-size:11px;color:var(--text-light)}
-.cp-body p{font-size:13px;line-height:1.5}
-.cp-empty{text-align:center;padding:60px 0;color:var(--text-light);font-size:13px}
-
-.cp-input-bar{
-  display:flex;gap:8px;padding:10px 16px;border-top:1px solid var(--border);
+  padding:16px 20px;border-bottom:1px solid var(--border);
   background:var(--bg-card);
 }
-.cp-name{
-  width:70px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);
-  font-size:12px;font-family:inherit;background:var(--bg);color:var(--text);outline:none;
+.cp-back,.cp-close{border:none;background:transparent;font-size:20px;cursor:pointer;padding:6px 10px;border-radius:10px;transition:all 0.2s ease;color:var(--text)}
+.cp-back:hover,.cp-close:hover{background:var(--accent-light)}
+.cp-title{font-size:17px;font-weight:700}
+.cp-list{flex:1;overflow-y:auto;padding:16px 20px}
+.cp-item{display:flex;gap:12px;margin-bottom:18px}
+.cp-avatar{
+  width:36px;height:36px;border-radius:50%;background:var(--gradient-soft);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;flex-shrink:0;
+  box-shadow:0 2px 8px rgba(232,122,159,0.15);
+  background-size:cover;background-position:center;
 }
-.cp-input{
-  flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);
+.cp-avatar.no-avatar-text span{display:none}
+.cp-body{flex:1}
+.cp-meta{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.cp-meta strong{font-size:14px;font-weight:600}
+.cp-time{font-size:11px;color:var(--text-light)}
+.cp-body p{font-size:14px;line-height:1.6;color:var(--text)}
+.cp-meta{display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap}
+.cp-actions{display:flex;gap:4px;margin-left:auto}
+.cp-action-btn{
+  border:none;background:transparent;font-size:12px;cursor:pointer;
+  padding:4px 6px;opacity:0.5;transition:all 0.2s ease;border-radius:6px;
+}
+.cp-action-btn:hover{opacity:1;background:var(--accent-light);transform:scale(1.1)}
+.cp-delete:hover{background:#fff0f0}
+.cp-edit-wrap{margin-top:8px}
+.cp-edit-input{
+  width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;
+  font-size:13px;font-family:inherit;background:var(--bg);color:var(--text);outline:none;
+  transition:all 0.25s ease;margin-bottom:8px;
+}
+.cp-edit-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(232,122,159,0.1)}
+.cp-edit-actions{display:flex;gap:8px;justify-content:flex-end}
+.cp-empty{text-align:center;padding:80px 0;color:var(--text-light);font-size:14px}
+
+.cp-input-bar{
+  display:flex;gap:10px;padding:14px 20px;border-top:1px solid var(--border);
+  background:var(--bg-card);
+  box-shadow:0 -4px 16px rgba(0,0,0,0.04);
+}
+.cp-name{
+  width:80px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);
   font-size:13px;font-family:inherit;background:var(--bg);color:var(--text);outline:none;
 }
-.cp-input:focus,.cp-name:focus{border-color:var(--accent)}
-.cp-send{
-  border:none;background:var(--accent);color:#fff;
-  padding:8px 14px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;
-  cursor:pointer;font-family:inherit;
+.cp-input{
+  flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);
+  font-size:14px;font-family:inherit;background:var(--bg);color:var(--text);outline:none;
+  transition:all 0.25s ease;
 }
+.cp-input:focus,.cp-name:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(232,122,159,0.1)}
+.cp-send{
+  border:none;background:var(--gradient-accent);color:#fff;
+  padding:10px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;
+  cursor:pointer;font-family:inherit;transition:all 0.25s ease;
+  box-shadow:0 4px 12px rgba(232,122,159,0.3);
+}
+.cp-send:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(232,122,159,0.4)}
 
-.slide-up-enter-active,.slide-up-leave-active{transition:transform 0.3s ease}
+.slide-up-enter-active,.slide-up-leave-active{transition:transform 0.35s cubic-bezier(0.4,0,0.2,1)}
 .slide-up-enter-from,.slide-up-leave-to{transform:translateY(100%)}
 
 /* ============ MESSAGE FORM ============ */
 .msg-form{
-  background:var(--bg-card);border-radius:var(--radius);padding:18px;
-  margin:0 20px 16px;box-shadow:var(--shadow);border:1px solid var(--border);
+  background:var(--bg-card);border-radius:var(--radius-lg);padding:20px;
+  margin:0 20px 18px;box-shadow:var(--shadow);border:1px solid var(--border);
 }
-.form-row{display:flex;gap:8px;margin-bottom:10px}
+.form-row{display:flex;gap:10px;margin-bottom:12px}
 .form-input{
-  flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);
-  font-size:13px;font-family:inherit;background:var(--bg);color:var(--text);outline:none;
+  flex:1;padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);
+  font-size:14px;font-family:inherit;background:var(--bg);color:var(--text);outline:none;
+  transition:all 0.25s ease;
 }
-.form-input:focus{border-color:var(--accent)}
-.mood-selector{display:flex;gap:3px}
+.form-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(232,122,159,0.1)}
+.mood-selector{display:flex;gap:4px}
 .mood-btn{
-  width:34px;height:34px;border:1px solid var(--border);background:var(--bg);border-radius:10px;
-  font-size:15px;cursor:pointer;transition:var(--transition);display:flex;align-items:center;justify-content:center;
+  width:38px;height:38px;border:1px solid var(--border);background:var(--bg);border-radius:12px;
+  font-size:16px;cursor:pointer;transition:all 0.25s ease;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 6px rgba(0,0,0,0.04);
 }
-.mood-btn.active{border-color:var(--accent);background:var(--accent-light);transform:scale(1.1)}
+.mood-btn:hover{transform:scale(1.08);box-shadow:0 4px 10px rgba(0,0,0,0.08)}
+.mood-btn.active{border-color:var(--accent);background:var(--accent-light);transform:scale(1.12);box-shadow:0 4px 12px rgba(232,122,159,0.2)}
 .form-textarea{
-  width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);
-  font-size:13px;font-family:inherit;background:var(--bg);color:var(--text);outline:none;
-  resize:none;margin-bottom:10px;line-height:1.6;
+  width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);
+  font-size:14px;font-family:inherit;background:var(--bg);color:var(--text);outline:none;
+  resize:none;margin-bottom:12px;line-height:1.6;transition:all 0.25s ease;
 }
-.form-textarea:focus{border-color:var(--accent)}
+.form-textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(232,122,159,0.1)}
+.form-textarea::placeholder{color:var(--text-light)}
 .submit-btn{
-  width:80px;padding:9px 0;border:none;border-radius:var(--radius-sm);
-  background:var(--accent);color:#fff;font-size:12px;cursor:pointer;font-family:inherit;transition:var(--transition);
-  flex-shrink:0;font-weight:500;letter-spacing:0.5px;
+  width:84px;padding:11px 0;border:none;border-radius:var(--radius-sm);
+  background:var(--gradient-accent);color:#fff;font-size:13px;cursor:pointer;font-family:inherit;transition:all 0.25s ease;
+  flex-shrink:0;font-weight:600;letter-spacing:0.5px;
+  box-shadow:0 4px 12px rgba(232,122,159,0.3);
 }
-.submit-btn:hover:not(:disabled){opacity:0.9}
-.submit-btn:disabled{opacity:0.4;cursor:not-allowed}
+.submit-btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 16px rgba(232,122,159,0.4)}
+.submit-btn:disabled{opacity:0.4;cursor:not-allowed;transform:none}
+.btn-primary{
+  background:var(--gradient-accent);color:#fff;border:none;border-radius:var(--radius);
+  padding:12px 28px;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.3s;
+  box-shadow:0 4px 12px rgba(232,122,159,0.3);
+}
+.btn-primary:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 16px rgba(232,122,159,0.4)}
+.btn-primary:disabled{opacity:0.4;cursor:not-allowed;transform:none}
+.btn-secondary{
+  background:var(--bg-card);color:var(--accent);border:1px solid var(--accent);
+  border-radius:var(--radius);padding:10px 24px;font-size:14px;font-weight:500;cursor:pointer;
+  transition:all 0.25s;
+}
+.btn-secondary:hover{background:var(--accent-light)}
 
 /* Message list */
 .msg-list{padding:0 20px}
-.msg-card{display:flex;gap:10px;margin-bottom:10px;padding:14px;background:var(--bg-card);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--border)}
+.msg-card{
+  display:flex;gap:12px;margin-bottom:12px;padding:16px;
+  background:var(--bg-card);border-radius:var(--radius);box-shadow:var(--shadow);
+  border:1px solid var(--border);transition:all 0.25s ease;
+}
+.msg-card:hover{box-shadow:var(--shadow-md)}
 .msg-card.msg-private{border-color:var(--accent-soft);background:linear-gradient(135deg,#fff,#fef8fb)}
 .msg-avatar{
-  width:36px;height:36px;border-radius:50%;background:var(--accent-light);color:var(--accent);
-  display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;flex-shrink:0;
+  width:40px;height:40px;border-radius:50%;background:var(--gradient-soft);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;flex-shrink:0;
+  box-shadow:0 2px 8px rgba(232,122,159,0.15);
+  background-size:cover;background-position:center;
 }
+.msg-avatar.no-avatar-text span{display:none}
 .msg-body{flex:1;min-width:0}
-.msg-meta{display:flex;align-items:center;gap:8px;margin-bottom:2px;flex-wrap:wrap}
-.msg-name{font-size:13px;font-weight:600}
-.msg-private-badge{font-size:11px;flex-shrink:0;margin-left:2px}
+.msg-meta{display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap}
+.msg-name{font-size:14px;font-weight:600}
+.msg-private-badge{font-size:11px;flex-shrink:0}
 .msg-time{font-size:11px;color:var(--text-light)}
-.msg-actions-menu{display:flex;gap:2px;margin-left:auto}
+.msg-actions-menu{display:flex;gap:4px;margin-left:auto}
 .msg-action-btn{
-  border:none;background:transparent;font-size:13px;cursor:pointer;
-  padding:2px 4px;opacity:0.6;transition:var(--transition);border-radius:4px;
+  border:none;background:transparent;font-size:14px;cursor:pointer;
+  padding:4px 6px;opacity:0.6;transition:all 0.2s ease;border-radius:8px;
 }
-.msg-action-btn:hover{opacity:1;background:var(--accent-light)}
-.msg-edit-wrap{margin:6px 0}
-.msg-edit-actions{display:flex;gap:8px;justify-content:flex-end}
-.msg-text{font-size:13px;line-height:1.5;word-break:break-word}
+.msg-action-btn:hover{opacity:1;background:var(--accent-light);transform:scale(1.1)}
+.msg-edit-wrap{margin:8px 0}
+.msg-edit-actions{display:flex;gap:10px;justify-content:flex-end}
+.msg-text{font-size:14px;line-height:1.6;word-break:break-word;color:var(--text)}
 .msg-like-btn{
-  margin-top:6px;border:none;background:transparent;font-size:12px;cursor:pointer;
-  color:var(--text-light);padding:0;font-family:inherit;
+  margin-top:8px;border:none;background:transparent;font-size:13px;cursor:pointer;
+  color:var(--text-light);padding:4px 8px;font-family:inherit;transition:all 0.2s ease;border-radius:8px;
 }
+.msg-like-btn:hover{background:var(--accent-light);color:var(--accent)}
 
 /* Private toggle */
-.form-row-bottom{display:flex;align-items:center;justify-content:space-between;margin-top:8px}
-.private-toggle{display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none;white-space:nowrap;flex-shrink:0}
+.form-row-bottom{display:flex;align-items:center;justify-content:space-between;margin-top:10px}
+.private-toggle{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none;white-space:nowrap;flex-shrink:0}
 .private-toggle input{display:none}
-.private-label{font-size:12px;color:var(--text-light);transition:var(--transition);white-space:nowrap}
-.private-toggle input:checked + .private-label{color:var(--accent);font-weight:500}
+.private-label{font-size:13px;color:var(--text-light);transition:all 0.25s ease;white-space:nowrap;padding:6px 12px;background:var(--bg);border-radius:20px;border:1px solid var(--border)}
+.private-toggle input:checked + .private-label{color:var(--accent);border-color:var(--accent);background:var(--accent-light);font-weight:500}
 
 /* ============ EASTER EGG ============ */
 .egg-page{
-  position:fixed;inset:0;z-index:1000;
+  position:fixed;inset:0;z-index:9997;
   background:linear-gradient(135deg,#1a1a2e,#16213e,#0f3460);
   display:flex;align-items:center;justify-content:center;color:#fff;
   overflow:hidden;
@@ -1687,7 +2231,7 @@ body{
 
 /* ============ STORY VIEWER ============ */
 .story-viewer{
-  position:fixed;inset:0;z-index:800;
+  position:fixed;inset:0;z-index:9996;
   background:rgba(0,0,0,0.92);display:flex;flex-direction:column;
   color:#fff;cursor:pointer;
 }
@@ -1704,55 +2248,63 @@ body{
 .fade-enter-from,.fade-leave-to{opacity:0}
 
 /* ============ EMPTY STATE ============ */
-.empty-state{text-align:center;padding:60px 20px;color:var(--text-light)}
-.empty-icon{font-size:48px;display:block;margin-bottom:12px;opacity:0.5}
-.empty-state p{font-size:13px;white-space:pre-line}
+.empty-state{text-align:center;padding:80px 20px;color:var(--text-light)}
+.empty-icon{font-size:56px;display:block;margin-bottom:16px;opacity:0.6;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.08))}
+.empty-state p{font-size:14px;white-space:pre-line;line-height:1.8}
 
 /* ============ FOOTER ============ */
-.footer{text-align:center;padding:24px 20px;font-size:11px;color:var(--text-light)}
-.heart{color:var(--accent);animation:heartbeat 1.5s ease infinite;display:inline-block}
-@keyframes heartbeat{0%,100%{transform:scale(1)}50%{transform:scale(1.2)}}
+.footer{text-align:center;padding:28px 20px;font-size:11px;color:var(--text-light);letter-spacing:0.5px}
+.heart{color:var(--accent);animation:heartbeat 1.5s ease infinite;display:inline-block;font-size:14px}
+@keyframes heartbeat{0%,100%{transform:scale(1)}50%{transform:scale(1.25)}}
 
 /* ============ TOAST ============ */
 .toast{
-  position:fixed;bottom:100px;left:50%;transform:translateX(-50%);
-  padding:10px 24px;border-radius:20px;font-size:13px;z-index:2000;
-  box-shadow:var(--shadow-lg);white-space:nowrap;
+  position:fixed;bottom:90px;left:50%;transform:translateX(-50%);
+  padding:12px 28px;border-radius:24px;font-size:14px;z-index:2000;
+  box-shadow:var(--shadow-lg);white-space:nowrap;font-weight:500;
+  backdrop-filter:blur(10px);
 }
-.toast.success{background:var(--text);color:var(--bg)}
-.toast.error{background:#ff6b6b;color:#fff}
-.toast-enter-active{animation:toastIn 0.3s ease}
-.toast-leave-active{animation:toastOut 0.3s ease}
-@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
-@keyframes toastOut{from{opacity:1;transform:translateX(-50%) translateY(0)}to{opacity:0;transform:translateX(-50%) translateY(20px)}}
+.toast.success{background:rgba(45,45,45,0.95);color:var(--bg)}
+.toast.error{background:linear-gradient(135deg,#ff6b6b,#ff5252);color:#fff;box-shadow:0 6px 20px rgba(255,107,107,0.4)}
+.toast-enter-active{animation:toastIn 0.35s cubic-bezier(0.34,1.56,0.64,1)}
+.toast-leave-active{animation:toastOut 0.25s ease}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(20px) scale(0.8)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}
+@keyframes toastOut{from{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}to{opacity:0;transform:translateX(-50%) translateY(10px) scale(0.95)}}
 
 /* ============ CONFIRM DIALOG ============ */
 .confirm-box{
-  background:var(--bg-card);border-radius:var(--radius);padding:32px 28px 24px;
-  width:100%;max-width:300px;box-shadow:var(--shadow-lg);text-align:center;
-  animation:confirmPop 0.3s ease;
+  background:var(--bg-card);border-radius:var(--radius-lg);padding:32px 28px 24px;
+  width:100%;max-width:320px;box-shadow:var(--shadow-lg);text-align:center;
+  animation:confirmPop 0.3s cubic-bezier(0.34,1.56,0.64,1);border:1px solid var(--border);
 }
-@keyframes confirmPop{from{opacity:0;transform:scale(0.9)}to{opacity:1;transform:scale(1)}}
-.confirm-icon{font-size:40px;margin-bottom:12px}
-.confirm-text{font-size:14px;color:var(--text);margin-bottom:20px;line-height:1.5}
-.confirm-actions{display:flex;gap:10px}
-.btn-danger{background:#ff6b6b;color:#fff}
-.btn-danger:hover{background:#ff5252}
+@keyframes confirmPop{from{opacity:0;transform:scale(0.88)}to{opacity:1;transform:scale(1)}}
+.confirm-icon{font-size:48px;margin-bottom:14px;filter:drop-shadow(0 2px 8px rgba(0,0,0,0.1))}
+.confirm-text{font-size:15px;color:var(--text);margin-bottom:24px;line-height:1.6}
+.confirm-actions{display:flex;gap:12px}
+.btn-cancel{box-shadow:none}
+.btn-danger{background:linear-gradient(135deg,#ff6b6b,#ff5252);color:#fff;box-shadow:0 4px 12px rgba(255,107,107,0.3)}
+.btn-danger:hover{background:linear-gradient(135deg,#ff5252,#ff4040);box-shadow:0 6px 16px rgba(255,107,107,0.4)}
 
 /* ============ RESPONSIVE ============ */
 @media(max-width:480px){
-  .profile-header{padding:20px 16px 12px}
-  .profile-avatar{width:60px;height:60px;font-size:26px}
-  .profile-stats{padding:0 16px 16px}
-  .feature-card{margin:0 16px 20px;padding:20px}
-  .section-head{padding:12px 16px 10px}
-  .msg-form{margin:0 16px 12px;padding:14px}
+  .profile-header{padding:22px 16px 14px}
+  .profile-avatar{width:64px;height:64px;font-size:28px}
+  .profile-stats{padding:14px 20px 20px;margin:0 16px}
+  .feature-card{margin:0 16px 22px;padding:22px}
+  .section-head{padding:14px 16px 12px}
+  .msg-form{margin:0 16px 14px;padding:16px}
   .msg-list{padding:0 16px}
-  .stories-bar{padding:6px 16px 16px}
+  .stories-bar{padding:16px}
+  .post-card{margin:0 12px 10px}
+  .confirm-box{padding:28px 24px 20px}
 }
 
-/* Scrollbar */
-::-webkit-scrollbar{width:3px}
+/* ============ SCROLLBAR ============ */
+::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--accent-soft)}
+
+/* ============ SELECTION ============ */
+::selection{background:var(--accent-soft);color:var(--accent-deep)}
 </style>

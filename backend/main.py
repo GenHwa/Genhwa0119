@@ -25,12 +25,11 @@ JWT_EXPIRE_HOURS = 720  # 30 days
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,  # 来自 config.py
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 # Static files for uploads
 UPLOAD_DIR.mkdir(exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
@@ -70,6 +69,8 @@ def init_db():
                     username VARCHAR(50) NOT NULL UNIQUE,
                     password_hash VARCHAR(255) NOT NULL,
                     nickname VARCHAR(100) DEFAULT '',
+                    phone VARCHAR(50) DEFAULT '',
+                    email VARCHAR(100) DEFAULT '',
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
@@ -115,7 +116,9 @@ def init_db():
                     nickname VARCHAR(100) NOT NULL DEFAULT '익명',
                     content TEXT NOT NULL,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    likes INT DEFAULT 0
+                    likes INT DEFAULT 0,
+                    user_id INT DEFAULT NULL,
+                    avatar VARCHAR(255) DEFAULT ''
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
             cursor.execute("""
@@ -139,6 +142,11 @@ def init_db():
                 ("letter_photos", "user_id", "INT DEFAULT NULL"),
                 ("letter_photos", "is_private", "TINYINT(1) DEFAULT 0"),
                 ("letter_photos", "location", "VARCHAR(255) DEFAULT ''"),
+                ("letter_users", "avatar", "VARCHAR(255) DEFAULT ''"),
+                ("letter_users", "phone", "VARCHAR(50) DEFAULT ''"),
+                ("letter_users", "email", "VARCHAR(100) DEFAULT ''"),
+                ("letter_comments", "user_id", "INT DEFAULT NULL"),
+                ("letter_comments", "avatar", "VARCHAR(255) DEFAULT ''"),
             ]:
                 try:
                     cursor.execute(f"ALTER TABLE `{col_def[0]}` ADD COLUMN `{col_def[1]}` {col_def[2]}")
@@ -246,11 +254,96 @@ def get_me(token: str = ""):
     conn = get_db()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id, username, nickname, created_at FROM letter_users WHERE id=%s", (payload["user_id"],))
+            cursor.execute("SELECT id, username, nickname, avatar, created_at FROM letter_users WHERE id=%s", (payload["user_id"],))
             user = cursor.fetchone()
             if user:
                 user["created_at"] = fmt_time(user["created_at"])
         return {"code": 200, "user": user}
+    finally:
+        conn.close()
+
+
+@app.post("/api/auth/avatar")
+def upload_avatar(file: UploadFile = File(...), token: str = Form("")):
+    if not token:
+        raise HTTPException(status_code=401, detail="Login required")
+    user = decode_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Image only")
+    ext = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
+    filename = f"avatar_{user['user_id']}_{uuid.uuid4().hex[:8]}{ext}"
+    filepath = UPLOAD_DIR / filename
+    with open(filepath, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE letter_users SET avatar=%s WHERE id=%s", (filename, user["user_id"]))
+        conn.commit()
+        return {"code": 200, "message": "Avatar updated", "filename": filename}
+    finally:
+        conn.close()
+
+
+@app.put("/api/auth/profile")
+def update_profile(nickname: str = Form(None), phone: str = Form(None),
+                   email: str = Form(None), token: str = Form("")):
+    if not token:
+        raise HTTPException(status_code=401, detail="Login required")
+    user = decode_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            updates = []
+            params = []
+            if nickname is not None:
+                updates.append("nickname=%s")
+                params.append(nickname.strip())
+            if phone is not None:
+                updates.append("phone=%s")
+                params.append(phone.strip())
+            if email is not None:
+                updates.append("email=%s")
+                params.append(email.strip())
+            if updates:
+                params.append(user["user_id"])
+                cursor.execute(f"UPDATE letter_users SET {', '.join(updates)} WHERE id=%s", params)
+        conn.commit()
+        # Fetch updated user
+        cursor.execute("SELECT id, username, nickname, phone, email, avatar, created_at FROM letter_users WHERE id=%s", (user["user_id"],))
+        updated_user = cursor.fetchone()
+        if updated_user:
+            updated_user["created_at"] = fmt_time(updated_user["created_at"])
+        return {"code": 200, "message": "Profile updated", "user": updated_user}
+    finally:
+        conn.close()
+
+
+@app.put("/api/auth/password")
+def change_password(old_password: str = Form(""), new_password: str = Form(""), token: str = Form("")):
+    if not token:
+        raise HTTPException(status_code=401, detail="Login required")
+    user = decode_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    if not old_password or not new_password:
+        raise HTTPException(status_code=400, detail="Password required")
+    if len(new_password) < 3:
+        raise HTTPException(status_code=400, detail="Password too short")
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT password_hash FROM letter_users WHERE id=%s", (user["user_id"],))
+            db_user = cursor.fetchone()
+            if not db_user or db_user["password_hash"] != hash_password(old_password):
+                raise HTTPException(status_code=400, detail="Incorrect old password")
+            cursor.execute("UPDATE letter_users SET password_hash=%s WHERE id=%s", (hash_password(new_password), user["user_id"]))
+        conn.commit()
+        return {"code": 200, "message": "Password changed"}
     finally:
         conn.close()
 
@@ -268,7 +361,7 @@ def get_messages(token: str = ""):
             if user:
                 # Logged in: show all public + own private
                 cursor.execute(
-                    "SELECT m.*, u.nickname as author_name FROM letter_messages m "
+                    "SELECT m.*, u.nickname as author_name, u.avatar as author_avatar FROM letter_messages m "
                     "LEFT JOIN letter_users u ON m.user_id = u.id "
                     "WHERE m.is_private = 0 OR m.user_id = %s ORDER BY m.created_at DESC",
                     (user["user_id"],)
@@ -276,7 +369,7 @@ def get_messages(token: str = ""):
             else:
                 # Not logged in: show only public
                 cursor.execute(
-                    "SELECT m.*, u.nickname as author_name FROM letter_messages m "
+                    "SELECT m.*, u.nickname as author_name, u.avatar as author_avatar FROM letter_messages m "
                     "LEFT JOIN letter_users u ON m.user_id = u.id "
                     "WHERE m.is_private = 0 ORDER BY m.created_at DESC"
                 )
@@ -424,14 +517,14 @@ def get_photos(token: str = ""):
         with conn.cursor() as cursor:
             if user:
                 cursor.execute(
-                    "SELECT p.*, u.nickname as author_name FROM letter_photos p "
+                    "SELECT p.*, u.nickname as author_name, u.avatar as author_avatar FROM letter_photos p "
                     "LEFT JOIN letter_users u ON p.user_id = u.id "
                     "WHERE p.is_private = 0 OR p.user_id = %s ORDER BY p.created_at DESC",
                     (user["user_id"],)
                 )
             else:
                 cursor.execute(
-                    "SELECT p.*, u.nickname as author_name FROM letter_photos p "
+                    "SELECT p.*, u.nickname as author_name, u.avatar as author_avatar FROM letter_photos p "
                     "LEFT JOIN letter_users u ON p.user_id = u.id "
                     "WHERE p.is_private = 0 ORDER BY p.created_at DESC"
                 )
@@ -538,22 +631,95 @@ def get_comments(photo_id: int):
 
 
 @app.post("/api/photos/{photo_id}/comments")
-def add_comment(photo_id: int, nickname: str = Form("익명"), content: str = Form("")):
+def add_comment(photo_id: int, nickname: str = Form("익명"), content: str = Form(""), token: str = Form(None)):
     if not content.strip():
         raise HTTPException(status_code=400, detail="Content required")
+    user_id = None
+    user_avatar = None
+    if token:
+        payload = decode_token(token)
+        if payload:
+            user_id = payload["user_id"]
+            conn2 = get_db()
+            try:
+                with conn2.cursor() as c2:
+                    c2.execute("SELECT nickname, avatar FROM letter_users WHERE id=%s", (user_id,))
+                    u = c2.fetchone()
+                    if u:
+                        if u["nickname"]:
+                            nickname = u["nickname"]
+                        user_avatar = u.get("avatar") or None
+            finally:
+                conn2.close()
     conn = get_db()
     try:
         with conn.cursor() as cursor:
             cursor.execute(
-                "INSERT INTO letter_comments (photo_id, nickname, content) VALUES (%s, %s, %s)",
-                (photo_id, nickname.strip() or "익명", content.strip())
+                "INSERT INTO letter_comments (photo_id, nickname, content, user_id, avatar) VALUES (%s, %s, %s, %s, %s)",
+                (photo_id, nickname.strip() or "익명", content.strip(), user_id, user_avatar or "")
             )
+            comment_id = cursor.lastrowid
             cursor.execute(
                 "UPDATE letter_photos SET comments_count=comments_count+1 WHERE id=%s",
                 (photo_id,)
             )
         conn.commit()
-        return {"code": 200, "message": "💬"}
+        return {"code": 200, "message": "💬", "comment_id": comment_id}
+    finally:
+        conn.close()
+
+
+@app.put("/api/comments/{comment_id}")
+def update_comment(comment_id: int, content: str = Form(""), token: str = Form("")):
+    if not token:
+        raise HTTPException(status_code=401, detail="Login required")
+    user = decode_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    if not content.strip():
+        raise HTTPException(status_code=400, detail="Content required")
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM letter_comments WHERE id=%s", (comment_id,))
+            comment = cursor.fetchone()
+            if not comment:
+                raise HTTPException(status_code=404, detail="Comment not found")
+            # Check if user owns this comment by checking username match
+            cursor.execute("SELECT username FROM letter_users WHERE id=%s", (user["user_id"],))
+            db_user = cursor.fetchone()
+            if not db_user or db_user["username"] != comment["nickname"]:
+                raise HTTPException(status_code=403, detail="Not your comment")
+            cursor.execute("UPDATE letter_comments SET content=%s WHERE id=%s", (content.strip(), comment_id))
+        conn.commit()
+        return {"code": 200, "message": "Updated"}
+    finally:
+        conn.close()
+
+
+@app.delete("/api/comments/{comment_id}")
+def delete_comment(comment_id: int, token: str = Form("")):
+    if not token:
+        raise HTTPException(status_code=401, detail="Login required")
+    user = decode_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM letter_comments WHERE id=%s", (comment_id,))
+            comment = cursor.fetchone()
+            if not comment:
+                raise HTTPException(status_code=404, detail="Comment not found")
+            # Check if user owns this comment
+            cursor.execute("SELECT username FROM letter_users WHERE id=%s", (user["user_id"],))
+            db_user = cursor.fetchone()
+            if not db_user or db_user["username"] != comment["nickname"]:
+                raise HTTPException(status_code=403, detail="Not your comment")
+            cursor.execute("DELETE FROM letter_comments WHERE id=%s", (comment_id,))
+            cursor.execute("UPDATE letter_photos SET comments_count=GREATEST(comments_count-1,0) WHERE id=%s", (comment["photo_id"],))
+        conn.commit()
+        return {"code": 200, "message": "Deleted"}
     finally:
         conn.close()
 

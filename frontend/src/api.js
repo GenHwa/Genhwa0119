@@ -16,6 +16,15 @@ export const login = (data) => api.post('/api/auth/login', data, {
   headers: { 'Content-Type': 'multipart/form-data' }
 })
 export const getMe = (token) => api.get('/api/auth/me', { params: { token } })
+export const uploadAvatar = (formData) => api.post('/api/auth/avatar', formData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
+export const updateProfile = (data) => api.put('/api/auth/profile', data, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
+export const changePassword = (data) => api.put('/api/auth/password', data, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
 
 // Get token helper
 export function getToken() {
@@ -48,6 +57,13 @@ export const likePhoto = (id, userHash) => api.post(`/api/photos/${id}/like`, ne
 export const getComments = (photoId) => api.get(`/api/photos/${photoId}/comments`)
 export const addComment = (photoId, data) => api.post(`/api/photos/${photoId}/comments`, data, {
   headers: { 'Content-Type': 'multipart/form-data' }
+})
+export const updateComment = (commentId, data) => api.put(`/api/comments/${commentId}`, data, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+})
+export const deleteComment = (commentId, token) => api.delete(`/api/comments/${commentId}`, {
+  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  data: new URLSearchParams({ token })
 })
 export const deletePhoto = (id, token) => api.delete(`/api/photos/${id}`, {
   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
