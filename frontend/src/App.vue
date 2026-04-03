@@ -333,7 +333,7 @@
           <template v-if="profileTab === 'photos'">
             <div class="profile-grid" v-if="myPhotos.length">
               <div v-for="photo in myPhotos" :key="photo.id" class="pg-item">
-                <img :src="`${UPLOAD_BASE}${photo.filename}`" @click="openPhotoDetail(photo)" />
+                <img :src="getPhotoUrl(photo.filename)" @click="openPhotoDetail(photo)" />
               </div>
             </div>
             <div v-else class="profile-empty">{{ t('noPhotos') }}</div>
@@ -366,10 +366,10 @@
         <div v-if="profilePhotoModal" class="modal-overlay" @click.self="profilePhotoModal = null">
           <div class="ppm-wrap" @click.stop>
             <button class="ppm-close" @click="profilePhotoModal = null">×</button>
-            <img :src="`${UPLOAD_BASE}${profilePhotoModal.filename}`" class="ppm-img" />
+            <img :src="getPhotoUrl(profilePhotoModal.filename)" class="ppm-img" />
             <div class="ppm-info">
               <div class="ppm-header">
-                <div class="post-avatar sm-avatar" :style="profilePhotoModal.author_avatar ? `background-image: url('${UPLOAD_BASE}${profilePhotoModal.author_avatar}'); background-size: cover; background-position: center;` : ''">
+                <div class="post-avatar sm-avatar" :style="profilePhotoModal.author_avatar ? `background-image: url('${getPhotoUrl(profilePhotoModal.author_avatar)}'); background-size: cover; background-position: center;` : ''">
                   <span v-if="!profilePhotoModal.author_avatar">🤍</span>
                 </div>
                 <div>
@@ -776,14 +776,8 @@ const profileTab = ref('photos')
 const profilePhotoModal = ref(null)
 
 // Computed: my content
-const myPhotos = computed(() => {
-  if (!currentUser.value) return []
-  return photos.value.filter(p => p.user_id == currentUser.value.id)
-})
-const myMessages = computed(() => {
-  if (!currentUser.value) return []
-  return messages.value.filter(m => m.user_id == currentUser.value.id)
-})
+const myPhotos = ref([])
+const myMessages = ref([])
 
 // Login requirement popup
 const showLoginRequiredPopup = ref(false)
@@ -1554,6 +1548,7 @@ async function fetchPhotos() {
       })
     }
   } catch (e) { console.error(e) }
+  fetchMyContent()
 }
 
 async function fetchMessages() {
@@ -1562,6 +1557,7 @@ async function fetchMessages() {
     const res = await api.getMessages(token)
     if (res.data.code === 200) messages.value = res.data.data
   } catch (e) { console.error(e) }
+  fetchMyContent()
 }
 
 async function fetchStats() {
@@ -1577,10 +1573,23 @@ function fetchData() {
   fetchStats()
 }
 
+async function fetchMyContent() {
+  const token = api.getToken()
+  if (!token) return
+  try {
+    const [photoRes, msgRes] = await Promise.all([
+      api.getMyPhotos(token),
+      api.getMyMessages(token)
+    ])
+    if (photoRes.data.code === 200) myPhotos.value = photoRes.data.data
+    if (msgRes.data.code === 200) myMessages.value = msgRes.data.data
+  } catch (e) { console.error(e) }
+}
+
 // ============ Lifecycle ============
 onMounted(() => {
   localStorage.setItem('love_user_hash', userHash.value)
-  checkAuth().then(() => fetchData())
+  checkAuth().then(() => { fetchData(); fetchMyContent() })
   window.addEventListener('keydown', onKeyDown)
   quoteInterval = setInterval(() => {
     currentQuote.value = (currentQuote.value + 1) % 3

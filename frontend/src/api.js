@@ -47,6 +47,8 @@ export const likeMessage = (id, userHash) => api.post(`/api/messages/${id}/like`
 
 // Photos
 export const getPhotos = (token = '') => api.get('/api/photos', { params: { token } })
+export const getMyPhotos = (token = '') => api.get('/api/photos/my', { params: { token } })
+export const getMyMessages = (token = '') => api.get('/api/messages/my', { params: { token } })
 export const uploadPhoto = (formData) => api.post('/api/photos', formData, {
   headers: { 'Content-Type': 'multipart/form-data' }
 })

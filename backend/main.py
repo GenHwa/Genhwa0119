@@ -543,6 +543,56 @@ def get_photos(token: str = ""):
         conn.close()
 
 
+@app.get("/api/photos/my")
+def get_my_photos(token: str = ""):
+    if not token:
+        return {"code": 200, "data": []}
+    user = decode_token(token)
+    if not user:
+        return {"code": 200, "data": []}
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT p.*, u.nickname as author_name, u.avatar as author_avatar FROM letter_photos p "
+                "LEFT JOIN letter_users u ON p.user_id = u.id "
+                "WHERE p.user_id = %s ORDER BY p.created_at DESC",
+                (user["user_id"],)
+            )
+            photos = cursor.fetchall()
+            for photo in photos:
+                photo["created_at"] = fmt_time(photo["created_at"])
+        return {"code": 200, "data": photos}
+    finally:
+        conn.close()
+
+
+@app.get("/api/messages/my")
+def get_my_messages(token: str = ""):
+    if not token:
+        return {"code": 200, "data": []}
+    user = decode_token(token)
+    if not user:
+        return {"code": 200, "data": []}
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT m.*, u.nickname as author_name, u.avatar as author_avatar FROM letter_messages m "
+                "LEFT JOIN letter_users u ON m.user_id = u.id "
+                "WHERE m.user_id = %s ORDER BY m.created_at DESC",
+                (user["user_id"],)
+            )
+            msgs = cursor.fetchall()
+            for m in msgs:
+                m["created_at"] = fmt_time(m["created_at"])
+        return {"code": 200, "data": msgs}
+    finally:
+        conn.close()
+
+
+
+
 @app.post("/api/photos")
 def upload_photo(file: UploadFile = File(...), caption: str = Form(""),
                  token: str = Form(None), is_private: int = Form(0),
