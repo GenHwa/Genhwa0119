@@ -547,14 +547,14 @@ def get_photos(token: str = "", page: int = 1, limit: int = 10, feed: str = "all
     try:
         with conn.cursor() as cursor:
             if feed == "following" and user:
-                # Only photos from users that current user follows
+                # Only photos from users that current user follows (including self)
                 cursor.execute(
                     "SELECT p.*, u.nickname as author_name, u.avatar as author_avatar FROM letter_photos p "
-                    "INNER JOIN letter_follows f ON p.user_id = f.following_id AND f.follower_id = %s "
                     "LEFT JOIN letter_users u ON p.user_id = u.id "
-                    "WHERE p.is_private = 0 "
+                    "WHERE p.is_private = 0 AND (p.user_id = %s OR p.user_id IN "
+                    "(SELECT following_id FROM letter_follows WHERE follower_id = %s)) "
                     "ORDER BY p.created_at DESC LIMIT %s OFFSET %s",
-                    (user["user_id"], limit, offset)
+                    (user["user_id"], user["user_id"], limit, offset)
                 )
             elif user:
                 cursor.execute(
