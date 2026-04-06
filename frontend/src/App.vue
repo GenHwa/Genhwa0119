@@ -9,7 +9,8 @@
     <header class="header">
       <div class="header-inner">
         <h1 class="logo" @click="logoClicks++; checkLogoEgg(); activeSection = 'home'">
-          <span class="logo-text">diary.</span>
+          <svg class="logo-icon" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="8" r="3" fill="currentColor"/><path d="M16 11v10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="M11 18l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+          <span class="logo-text">onul.</span>
         </h1>
         <div class="header-actions">
           <!-- Search input -->
@@ -40,7 +41,8 @@
     <section v-if="activeSection === 'login'" class="section">
       <div class="login-page">
         <div class="lp-logo" @click="activeSection = 'home'">
-          <span class="logo-text">diary.</span>
+          <svg class="lp-logo-icon" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="8" r="3" fill="currentColor"/><path d="M16 11v10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="M11 18l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+          <span class="logo-text">onul.</span>
         </div>
         <p class="lp-subtitle">{{ t('profileBio') }}</p>
         <div class="lp-form">
@@ -198,12 +200,12 @@
           <div class="profile-avatar-wrap">
             <div class="profile-avatar" :class="{ 'no-avatar': !currentUser?.avatar }" @dblclick="miniEgg">
               <img v-if="currentUser?.avatar" :src="UPLOAD_BASE + currentUser.avatar" class="avatar-img" />
-              <span v-else style="color:#8e8e8e;font-size:24px;font-weight:300">diary</span>
+              <span v-else style="color:#8e8e8e;font-size:24px;font-weight:300">onul</span>
             </div>
             <div class="avatar-ring"></div>
           </div>
           <div class="profile-info">
-            <h2 class="profile-name">{{ currentUser ? (currentUser.nickname || currentUser.username) : 'diary' }}</h2>
+            <h2 class="profile-name">{{ currentUser ? (currentUser.nickname || currentUser.username) : 'onul' }}</h2>
             <p class="profile-bio">{{ t('profileBio') }}</p>
           </div>
         </div>
@@ -313,7 +315,7 @@
                 <span v-else style="font-size:12px;color:#8e8e8e">●</span>
               </div>
               <div class="post-user-info">
-                <span class="post-username">{{ photo.author_name || 'diary' }}</span>
+                <span class="post-username">{{ photo.author_name || 'onul' }}</span>
                 <span class="post-location">{{ photo.location || t('inMyHeart') }}</span>
                 <span v-if="isPhotoOwner(photo)" class="msg-private-badge"><span class="icon-line icon-sm" v-html="photo.is_private ? icons.lock : icons.unlock"></span></span>
                 <span v-else-if="photo.is_private" class="msg-private-badge"><span class="icon-line icon-sm" v-html="icons.lock"></span></span>
@@ -378,7 +380,7 @@
 
             <!-- Caption -->
             <div class="post-caption" v-if="photo.caption && editingPhotoId !== photo.id">
-              <strong>{{ photo.author_name || 'diary' }}</strong> {{ photo.caption }}
+              <strong>{{ photo.author_name || 'onul' }}</strong> {{ photo.caption }}
             </div>
 
             <!-- View comments -->
@@ -468,14 +470,14 @@
           <div class="profile-avatar-wrap">
             <div class="profile-avatar lg-avatar" @click="avatarInput?.click()">
               <img v-if="currentUser?.avatar" :src="UPLOAD_BASE + currentUser.avatar" class="avatar-img" />
-              <span v-else style="color:#8e8e8e;font-size:22px;font-weight:300">diary</span>
+              <span v-else style="color:#8e8e8e;font-size:22px;font-weight:300">onul</span>
               <div class="avatar-edit-hint">✎</div>
             </div>
             <input ref="avatarInput" type="file" accept="image/*" style="display:none" @change="handleAvatarUpload">
             <div class="avatar-ring"></div>
           </div>
           <div class="profile-info">
-            <h2 class="profile-name">{{ currentUser?.nickname || currentUser?.username || 'diary' }}</h2>
+            <h2 class="profile-name">{{ currentUser?.nickname || currentUser?.username || 'onul' }}</h2>
             <p class="profile-bio">{{ t('profileBio') }}</p>
           </div>
         </div>
@@ -568,7 +570,7 @@
                   <span v-else style="font-size:12px;color:#8e8e8e">●</span>
                 </div>
                 <div>
-                  <div class="ppm-author">{{ profilePhotoModal.author_name || 'diary' }}</div>
+                  <div class="ppm-author">{{ profilePhotoModal.author_name || 'onul' }}</div>
                   <div class="ppm-location">{{ profilePhotoModal.location || t('inMyHeart') }}</div>
                 </div>
               </div>
@@ -604,7 +606,7 @@
                 <span v-else style="font-size:12px;color:#8e8e8e">●</span>
               </div>
               <div class="post-user-info">
-                <span class="post-username">{{ photo.author_name || 'diary' }}</span>
+                <span class="post-username">{{ photo.author_name || 'onul' }}</span>
                 <span class="post-location">{{ photo.location || t('inMyHeart') }}</span>
               </div>
               <button :class="['action-btn', { 'bookmark-active': true }]" @click="toggleBookmark(photo)" style="font-size:18px">
@@ -629,8 +631,8 @@
             </div>
             <div class="post-likes" v-if="photo.likes > 0">{{ photo.likes }} {{ t('peopleLike') }}</div>
             <div class="post-caption" v-if="photo.caption">
-              <strong>{{ photo.author_name || 'diary' }}</strong> {{ photo.caption }}
-            </div>
+              <strong>{{ photo.author_name || 'onul' }}</strong> {{ photo.caption }}
+              </div>
             <div class="post-time">{{ formatTimeAgo(photo.created_at) }}</div>
           </div>
         </div>
@@ -818,7 +820,7 @@ const languages = [
 
 const i18n = {
   ko: {
-    appTitle: 'diary.', home: '홈', gallery: '갤러리', messages: '방명록',
+    appTitle: 'onul.', home: '홈', gallery: '갤러리', messages: '방명록',
     profileBio: '소소한 일상 기록 ✦',
     photos: '게시물', msgCount: '개 글', likes: '좋아요',
     heroLine1: '기억하고 싶은 순간들을', heroLine2: '여기에 모아두려고 해',
@@ -864,7 +866,7 @@ const i18n = {
     bookmarks: '저장', bookmarked: '저장됨!', unbookmarked: '저장 취소', noBookmarks: '저장한 게시물이 없어요\n관심 있는 글을 저장해보세요!', feedAll: '전체', feedFollowing: '팔로잉', bookmarkCount: (n) => `저장 ${n}개`, refreshHint: '당겨서 새로고침', loadingMore: '불러오는 중...', noMorePhotos: '더 이상 게시물이 없어요', noFollowingPhotos: '팔로우하는 사용자의\n게시물이 아직 없어요', addMorePhotos: '사진 더 추가', maxPhotosReached: '최대 10장까지', photoCount: (n) => `${n}/10`,
   },
   en: {
-    appTitle: 'diary.', home: 'Home', gallery: 'Feed', messages: 'Board',
+    appTitle: 'onul.', home: 'Home', gallery: 'Feed', messages: 'Board',
     profileBio: 'little moments ✦',
     photos: 'Posts', msgCount: 'msgs', likes: 'Likes',
     heroLine1: 'Moments I want to remember', heroLine2: 'collected here',
@@ -910,7 +912,7 @@ const i18n = {
     bookmarks: 'Saved', bookmarked: 'Saved!', unbookmarked: 'Removed', noBookmarks: 'No saved posts yet\nSave posts you love!', feedAll: 'All', feedFollowing: 'Following', bookmarkCount: (n) => `${n} saved`, refreshHint: 'Pull down to refresh', loadingMore: 'Loading...', noMorePhotos: 'No more posts', noFollowingPhotos: 'No posts from people\nyou follow yet', addMorePhotos: 'Add more photos', maxPhotosReached: 'Max 10 photos', photoCount: (n) => `${n}/10`,
   },
   ja: {
-    appTitle: 'diary.', home: 'ホーム', gallery: 'フィード', messages: '掲示板',
+    appTitle: 'onul.', home: 'ホーム', gallery: 'フィード', messages: '掲示板',
     profileBio: 'ささやかな日々の記録 ✦',
     photos: '投稿', msgCount: '件', likes: 'いいね',
     heroLine1: '覚えておきたい瞬間を', heroLine2: 'ここに集めるね',
@@ -956,7 +958,7 @@ const i18n = {
     bookmarks: '保存済み', bookmarked: '保存しました!', unbookmarked: '保存解除', noBookmarks: '保存した投稿がありません\n気になる投稿を保存してみましょう!', feedAll: 'すべて', feedFollowing: 'フォロー中', bookmarkCount: (n) => `${n}件保存`, refreshHint: '下に引いて更新', loadingMore: '読み込み中...', noMorePhotos: 'これ以上投稿はありません', noFollowingPhotos: 'フォローしているユーザーの\n投稿がまだありません', addMorePhotos: '写真を追加', maxPhotosReached: '最大10枚まで', photoCount: (n) => `${n}/10`,
   },
   zh: {
-    appTitle: 'diary.', home: '首页', gallery: '动态', messages: '留言板',
+    appTitle: 'onul.', home: '首页', gallery: '动态', messages: '留言板',
     profileBio: '细碎日常记录 ✦',
     photos: '动态', msgCount: '条留言', likes: '获赞',
     heroLine1: '想把记住的瞬间', heroLine2: '都留在这里',
@@ -2293,8 +2295,9 @@ body{
   transition:background 0.35s ease, border-color 0.35s ease;
 }
 .header-inner{display:flex;align-items:center;justify-content:space-between;padding:12px 16px}
-.logo{display:flex;align-items:center;cursor:pointer;user-select:none;transition:transform 0.2s ease}
+.logo{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;transition:transform 0.2s ease}
 .logo:hover{transform:scale(1.02)}
+.logo-icon{width:20px;height:20px;color:var(--text)}
 .logo-text{font-size:22px;font-weight:300;letter-spacing:-0.5px;color:var(--text)}
 .header-actions{display:flex;align-items:center;gap:12px}
 
@@ -2335,7 +2338,8 @@ body{
 
 /* Login page */
 .login-page{display:flex;flex-direction:column;align-items:center;padding:60px 24px 40px;min-height:70vh;justify-content:center}
-.lp-logo{margin-bottom:8px;cursor:pointer}
+.lp-logo{margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:8px;justify-content:center}
+.lp-logo-icon{width:28px;height:28px;color:var(--text);opacity:0.7}
 .lp-subtitle{font-size:13px;color:var(--text-light);margin-bottom:36px;font-weight:300;letter-spacing:0.5px}
 .lp-form{width:100%;max-width:340px}
 .lp-form .modal-input{margin-bottom:12px}
