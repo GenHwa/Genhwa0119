@@ -1181,9 +1181,11 @@ async function toggleFollow() {
       userFollowStatus.value.is_following = res.data.followed
       if (res.data.followed) {
         userFollowStatus.value.followers_count += 1
+        myStats.following_count += 1
         showToast(t('followDone'))
       } else {
         userFollowStatus.value.followers_count -= 1
+        myStats.following_count = Math.max(0, myStats.following_count - 1)
         showToast(t('unfollowDone'))
       }
     }
