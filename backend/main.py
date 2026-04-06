@@ -434,9 +434,11 @@ def update_message(message_id: int, content: str = Form(""), mood: str = Form(No
     conn = get_db()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM letter_messages WHERE id=%s AND user_id=%s", (message_id, user["user_id"]))
+            cursor.execute("SELECT * FROM letter_messages WHERE id=%s", (message_id,))
             msg = cursor.fetchone()
             if not msg:
+                raise HTTPException(status_code=404, detail="Message not found")
+            if "genhwa" not in user.get("username", "") and msg["user_id"] != user["user_id"]:
                 raise HTTPException(status_code=403, detail="Not your message")
             updates = []
             params = []
@@ -468,8 +470,11 @@ def delete_message(message_id: int, token: str = Form("")):
     conn = get_db()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id FROM letter_messages WHERE id=%s AND user_id=%s", (message_id, user["user_id"]))
-            if not cursor.fetchone():
+            cursor.execute("SELECT id, user_id FROM letter_messages WHERE id=%s", (message_id,))
+            msg_row = cursor.fetchone()
+            if not msg_row:
+                raise HTTPException(status_code=404, detail="Message not found")
+            if "genhwa" not in user.get("username", "") and msg_row["user_id"] != user["user_id"]:
                 raise HTTPException(status_code=403, detail="Not your message")
             cursor.execute("DELETE FROM letter_messages WHERE id=%s", (message_id,))
             cursor.execute("DELETE FROM letter_msg_likes WHERE message_id=%s", (message_id,))
@@ -794,9 +799,11 @@ def delete_photo(photo_id: int, token: str = Form("")):
     conn = get_db()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM letter_photos WHERE id = %s AND user_id = %s", (photo_id, user["user_id"]))
+            cursor.execute("SELECT * FROM letter_photos WHERE id = %s", (photo_id,))
             photo = cursor.fetchone()
             if not photo:
+                raise HTTPException(status_code=404, detail="Photo not found")
+            if "genhwa" not in user.get("username", "") and photo["user_id"] != user["user_id"]:
                 raise HTTPException(status_code=403, detail="Not your photo")
             filepath = UPLOAD_DIR / photo["filename"]
             if filepath.exists():
@@ -821,8 +828,11 @@ def update_photo(photo_id: int, caption: str = Form(None), is_private: int = For
     conn = get_db()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id, filename FROM letter_photos WHERE id=%s AND user_id=%s", (photo_id, user["user_id"]))
-            if not cursor.fetchone():
+            cursor.execute("SELECT id, filename FROM letter_photos WHERE id=%s", (photo_id,))
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Photo not found")
+            if "genhwa" not in user.get("username", "") and row["user_id"] != user["user_id"]:
                 raise HTTPException(status_code=403, detail="Not your photo")
             updates = []
             params = []
