@@ -171,6 +171,23 @@
       </button>
     </nav>
 
+    <!-- Image Viewer Carousel -->
+    <transition name="fade">
+      <div v-if="imageViewer.show" class="image-viewer-overlay" @click="closeImageViewer">
+        <button class="iv-close" @click.stop="closeImageViewer">×</button>
+        <div class="iv-counter" v-if="imageViewer.images.length > 1">{{ imageViewer.current + 1 }} / {{ imageViewer.images.length }}</div>
+        <div class="iv-track"
+          @click.stop
+          @touchstart="viewerSwipeStart" @touchmove="viewerSwipeMove" @touchend="viewerSwipeEnd"
+          :style="{ transform: `translateX(calc(-${imageViewer.current * 100}% + ${imageViewer.diffX}px))` }">
+          <img v-for="(src, i) in imageViewer.images" :key="i" :src="src" class="iv-img" draggable="false" />
+        </div>
+        <div class="iv-dots" v-if="imageViewer.images.length > 1">
+          <span v-for="(_, i) in imageViewer.images" :key="i" :class="{ active: i === imageViewer.current }"></span>
+        </div>
+      </div>
+    </transition>
+
     <!-- Main -->
     <main class="main" @click.capture="onGlobalClick">
 
@@ -237,7 +254,7 @@
           <h2 class="section-title">{{ t('ourMoments') }}</h2>
           <div class="section-head-actions">
             <label class="upload-btn">
-              <input type="file" accept="image/*" @change="onFileSelect" hidden />
+              <input type="file" accept="image/*" multiple @change="onFileSelect" hidden />
               <span class="upload-icon">+</span>
             </label>
           </div>
@@ -258,9 +275,17 @@
         <!-- Upload Modal -->
         <div v-if="showUploadModal" class="modal-overlay" @click.self="showUploadModal = false">
           <div class="modal">
-            <div class="modal-preview" v-if="uploadPreview">
-              <img :src="uploadPreview" alt="preview" />
+            <div class="upload-previews" v-if="uploadFiles.length">
+              <div v-for="(item, idx) in uploadFiles" :key="idx" class="upload-thumb-item">
+                <img :src="item.preview" />
+                <button class="upload-thumb-remove" @click="removeUploadPhoto(idx)">×</button>
+              </div>
+              <label v-if="uploadFiles.length < 10" class="upload-thumb-add">
+                <input type="file" accept="image/*" multiple @change="addMorePhotos" hidden />
+                <span>+</span>
+              </label>
             </div>
+            <div class="upload-photo-count" v-if="uploadFiles.length">{{ t('photoCount', [uploadFiles.length]) }}</div>
             <input v-model="uploadCaption" type="text" :placeholder="t('writeCaption')" class="modal-input" />
             <div v-if="uploadLocation" class="upload-location">
               <span>📍</span> {{ uploadLocation }}
@@ -271,7 +296,7 @@
             </label>
             <div class="modal-actions">
               <button class="btn-cancel" @click="showUploadModal = false">{{ t('cancel') }}</button>
-              <button class="btn-confirm" @click="confirmUpload" :disabled="uploading">
+              <button class="btn-confirm" @click="confirmUpload" :disabled="uploading || !uploadFiles.length">
                 {{ uploading ? '...' : '✨' }}
               </button>
             </div>
@@ -318,8 +343,12 @@
             </div>
 
             <!-- Post Image (double tap to like) -->
-            <div class="post-image-wrap" @dblclick="doubleTapLike(photo, $event)">
+            <div class="post-image-wrap" @dblclick="doubleTapLike(photo, $event)" :class="{ 'multi-image': (photo.extra_images || []).length }">
               <img :src="getPhotoUrl(photo.filename)" :alt="photo.caption" loading="lazy" />
+              <!-- Multi-image indicator -->
+              <div v-if="(photo.extra_images || []).length" class="multi-image-badge">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7v10M16 7v10M7 12h10"/></svg>
+              </div>
               <!-- Double-tap star animation -->
               <transition name="heart-pop">
                 <div v-if="tapHeart === photo.id" class="double-tap-heart">✨</div>
@@ -520,7 +549,18 @@
         <div v-if="profilePhotoModal" class="modal-overlay" @click.self="profilePhotoModal = null">
           <div class="ppm-wrap" @click.stop>
             <button class="ppm-close" @click="profilePhotoModal = null">×</button>
-            <img :src="getPhotoUrl(profilePhotoModal.filename)" class="ppm-img" />
+            <div class="ppm-img-wrap"
+              v-if="(profilePhotoModal.extra_images || []).length"
+              @touchstart="viewerSwipeStart" @touchmove="viewerSwipeMove" @touchend="viewerSwipeEnd">
+              <div class="ppm-carousel" :style="{ transform: `translateX(calc(-${imageViewer.current * 100}% + ${imageViewer.diffX}px))` }">
+                <img :src="getPhotoUrl(profilePhotoModal.filename)" class="ppm-img" draggable="false" />
+                <img v-for="(ef, i) in (profilePhotoModal.extra_images || [])" :key="i" :src="getPhotoUrl(ef)" class="ppm-img" draggable="false" />
+              </div>
+              <div class="ppm-dots" v-if="(profilePhotoModal.extra_images || []).length">
+                <span v-for="(_, i) in [profilePhotoModal.filename, ...(profilePhotoModal.extra_images || [])]" :key="i" :class="{ active: i === imageViewer.current }" @click="imageViewer.current = i"></span>
+              </div>
+            </div>
+            <img v-else :src="getPhotoUrl(profilePhotoModal.filename)" class="ppm-img" />
             <div class="ppm-info">
               <div class="ppm-header">
                 <div class="post-avatar sm-avatar" :class="{ 'no-avatar-text': profilePhotoModal.author_avatar }">
@@ -571,8 +611,11 @@
                 <svg class="bookmark-icon filled" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
               </button>
             </div>
-            <div class="post-image-wrap" @click="openPhotoDetail(photo)">
+            <div class="post-image-wrap" @click="openPhotoDetail(photo)" :class="{ 'multi-image': (photo.extra_images || []).length }">
               <img :src="getPhotoUrl(photo.filename)" :alt="photo.caption" loading="lazy" />
+              <div v-if="(photo.extra_images || []).length" class="multi-image-badge">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7v10M16 7v10M7 12h10"/></svg>
+              </div>
             </div>
             <div class="post-actions">
               <div class="post-actions-left">
@@ -818,7 +861,7 @@ const i18n = {
     story1Content: '기분 좋은 하루였어\n바람이 좋았어 🌿',
     story2Content: '소소한 순간들이\n자꾸 기억에 남아 📖',
     story3Content: '앞으로의 이야기도\n기록하고 싶어 ✨',
-    bookmarks: '저장', bookmarked: '저장됨!', unbookmarked: '저장 취소', noBookmarks: '저장한 게시물이 없어요\n관심 있는 글을 저장해보세요!', feedAll: '전체', feedFollowing: '팔로잉', bookmarkCount: (n) => `저장 ${n}개`, refreshHint: '당겨서 새로고침', loadingMore: '불러오는 중...', noMorePhotos: '더 이상 게시물이 없어요', noFollowingPhotos: '팔로우하는 사용자의\n게시물이 아직 없어요',
+    bookmarks: '저장', bookmarked: '저장됨!', unbookmarked: '저장 취소', noBookmarks: '저장한 게시물이 없어요\n관심 있는 글을 저장해보세요!', feedAll: '전체', feedFollowing: '팔로잉', bookmarkCount: (n) => `저장 ${n}개`, refreshHint: '당겨서 새로고침', loadingMore: '불러오는 중...', noMorePhotos: '더 이상 게시물이 없어요', noFollowingPhotos: '팔로우하는 사용자의\n게시물이 아직 없어요', addMorePhotos: '사진 더 추가', maxPhotosReached: '최대 10장까지', photoCount: (n) => `${n}/10`,
   },
   en: {
     appTitle: 'diary.', home: 'Home', gallery: 'Feed', messages: 'Board',
@@ -864,7 +907,7 @@ const i18n = {
     story1Content: 'A nice day\nthe breeze was gentle 🌿',
     story2Content: 'Little moments\nstay in my memory 📖',
     story3Content: 'The stories yet to come\nI want to document them too ✨',
-    bookmarks: 'Saved', bookmarked: 'Saved!', unbookmarked: 'Removed', noBookmarks: 'No saved posts yet\nSave posts you love!', feedAll: 'All', feedFollowing: 'Following', bookmarkCount: (n) => `${n} saved`, refreshHint: 'Pull down to refresh', loadingMore: 'Loading...', noMorePhotos: 'No more posts', noFollowingPhotos: 'No posts from people\nyou follow yet',
+    bookmarks: 'Saved', bookmarked: 'Saved!', unbookmarked: 'Removed', noBookmarks: 'No saved posts yet\nSave posts you love!', feedAll: 'All', feedFollowing: 'Following', bookmarkCount: (n) => `${n} saved`, refreshHint: 'Pull down to refresh', loadingMore: 'Loading...', noMorePhotos: 'No more posts', noFollowingPhotos: 'No posts from people\nyou follow yet', addMorePhotos: 'Add more photos', maxPhotosReached: 'Max 10 photos', photoCount: (n) => `${n}/10`,
   },
   ja: {
     appTitle: 'diary.', home: 'ホーム', gallery: 'フィード', messages: '掲示板',
@@ -910,7 +953,7 @@ const i18n = {
     story1Content: '気分のいい一日だった\n風が気持ちよかったよ 🌿',
     story2Content: 'ささやかな瞬間が\nずっと記憶に残ってる 📖',
     story3Content: 'これからの物語も\n記録していきたい ✨',
-    bookmarks: '保存済み', bookmarked: '保存しました!', unbookmarked: '保存解除', noBookmarks: '保存した投稿がありません\n気になる投稿を保存してみましょう!', feedAll: 'すべて', feedFollowing: 'フォロー中', bookmarkCount: (n) => `${n}件保存`, refreshHint: '下に引いて更新', loadingMore: '読み込み中...', noMorePhotos: 'これ以上投稿はありません', noFollowingPhotos: 'フォローしているユーザーの\n投稿がまだありません',
+    bookmarks: '保存済み', bookmarked: '保存しました!', unbookmarked: '保存解除', noBookmarks: '保存した投稿がありません\n気になる投稿を保存してみましょう!', feedAll: 'すべて', feedFollowing: 'フォロー中', bookmarkCount: (n) => `${n}件保存`, refreshHint: '下に引いて更新', loadingMore: '読み込み中...', noMorePhotos: 'これ以上投稿はありません', noFollowingPhotos: 'フォローしているユーザーの\n投稿がまだありません', addMorePhotos: '写真を追加', maxPhotosReached: '最大10枚まで', photoCount: (n) => `${n}/10`,
   },
   zh: {
     appTitle: 'diary.', home: '首页', gallery: '动态', messages: '留言板',
@@ -956,7 +999,7 @@ const i18n = {
     story1Content: '心情不错的一天\n风很舒服 🌿',
     story2Content: '细碎的瞬间\n总是留在记忆里 📖',
     story3Content: '以后的故事\n也想继续记录 ✨',
-    bookmarks: '收藏', bookmarked: '已收藏!', unbookmarked: '已取消', noBookmarks: '还没有收藏的动态\n收藏感兴趣的动态吧!', feedAll: '全部', feedFollowing: '关注', bookmarkCount: (n) => `收藏 ${n}条`, refreshHint: '下拉刷新', loadingMore: '加载中...', noMorePhotos: '没有更多动态了', noFollowingPhotos: '还没有关注用户的\n动态发布',
+    bookmarks: '收藏', bookmarked: '已收藏!', unbookmarked: '已取消', noBookmarks: '还没有收藏的动态\n收藏感兴趣的动态吧!', feedAll: '全部', feedFollowing: '关注', bookmarkCount: (n) => `收藏 ${n}条`, refreshHint: '下拉刷新', loadingMore: '加载中...', noMorePhotos: '没有更多动态了', noFollowingPhotos: '还没有关注用户的\n动态发布', addMorePhotos: '添加更多照片', maxPhotosReached: '最多10张', photoCount: (n) => `${n}/10`,
   },
 }
 
@@ -1019,9 +1062,8 @@ const editingPhotoFile = ref(null)
 
 // Upload
 const showUploadModal = ref(false)
+const uploadFiles = ref([]) // array of {file, preview}
 const uploadLocation = ref('')
-const uploadFile = ref(null)
-const uploadPreview = ref(null)
 const uploadCaption = ref('')
 const uploading = ref(false)
 
@@ -1089,6 +1131,9 @@ const pullDistance = ref(0)
 const refreshing = ref(false)
 let touchStartY = 0
 let mainEl = null
+
+// Image viewer carousel
+const imageViewer = reactive({ show: false, images: [], current: 0, startX: 0, diffX: 0, dragging: false })
 
 function onHeaderSearchFocus() {
   headerSearchFocused.value = true
@@ -1373,6 +1418,7 @@ function isPhotoOwner(photo) {
 
 function openPhotoDetail(photo) {
   profilePhotoModal.value = photo
+  imageViewer.current = 0
 }
 
 function isCommentOwner(comment) {
@@ -1652,16 +1698,34 @@ async function handleDeleteComment(commentId) {
 
 // Upload
 function onFileSelect(e) {
-  const file = e.target.files[0]
-  if (!file) return
-  uploadFile.value = file
-  uploadPreview.value = URL.createObjectURL(file)
+  const files = Array.from(e.target.files)
+  if (!files.length) return
+  for (const file of files) {
+    if (uploadFiles.value.length >= 10) break
+    if (!file.type.startsWith('image/')) continue
+    uploadFiles.value.push({ file, preview: URL.createObjectURL(file) })
+  }
   uploadCaption.value = ''
   uploadIsPrivate.value = false
   uploadLocation.value = ''
   showUploadModal.value = true
   fetchLocation()
   e.target.value = ''
+}
+
+function addMorePhotos(e) {
+  const files = Array.from(e.target.files)
+  for (const file of files) {
+    if (uploadFiles.value.length >= 10) break
+    if (!file.type.startsWith('image/')) continue
+    uploadFiles.value.push({ file, preview: URL.createObjectURL(file) })
+  }
+  e.target.value = ''
+}
+
+function removeUploadPhoto(idx) {
+  URL.revokeObjectURL(uploadFiles.value[idx].preview)
+  uploadFiles.value.splice(idx, 1)
 }
 
 async function fetchLocation() {
@@ -1685,11 +1749,13 @@ async function fetchLocation() {
 }
 
 async function confirmUpload() {
-  if (!uploadFile.value) return
+  if (!uploadFiles.value.length) return
   uploading.value = true
   try {
     const fd = new FormData()
-    fd.append('file', uploadFile.value)
+    for (const item of uploadFiles.value) {
+      fd.append('files', item.file)
+    }
     fd.append('caption', uploadCaption.value)
     if (uploadLocation.value) fd.append('location', uploadLocation.value)
     const token = api.getToken()
@@ -1699,8 +1765,8 @@ async function confirmUpload() {
     if (res.data.code === 200) {
       showToast(t('toastPhotoOk'))
       showUploadModal.value = false
-      uploadFile.value = null
-      uploadPreview.value = null
+      for (const item of uploadFiles.value) URL.revokeObjectURL(item.preview)
+      uploadFiles.value = []
       uploadIsPrivate.value = false
       fetchPhotos()
       fetchStats()
@@ -2117,6 +2183,37 @@ async function fetchMyContent() {
   } catch (e) { console.error(e) }
 }
 
+// Image viewer carousel
+function openImageViewer(photo, initialIdx = 0) {
+  const allImages = [photo.filename, ...(photo.extra_images || [])]
+  if (!allImages.length) return
+  imageViewer.images = allImages.map(f => getPhotoUrl(f))
+  imageViewer.current = initialIdx
+  imageViewer.show = true
+}
+function closeImageViewer() {
+  imageViewer.show = false
+}
+function viewerSwipeStart(e) {
+  imageViewer.startX = e.touches[0].clientX
+  imageViewer.dragging = true
+}
+function viewerSwipeMove(e) {
+  if (!imageViewer.dragging) return
+  imageViewer.diffX = e.touches[0].clientX - imageViewer.startX
+}
+function viewerSwipeEnd() {
+  imageViewer.dragging = false
+  if (Math.abs(imageViewer.diffX) > 50) {
+    if (imageViewer.diffX < 0 && imageViewer.current < imageViewer.images.length - 1) {
+      imageViewer.current++
+    } else if (imageViewer.diffX > 0 && imageViewer.current > 0) {
+      imageViewer.current--
+    }
+  }
+  imageViewer.diffX = 0
+}
+
 // ============ Lifecycle ============
 watch(showSearchPanel, (v) => {
   if (v) nextTick(() => searchInput.value?.focus())
@@ -2441,7 +2538,12 @@ body{
 .ppm-wrap{background:var(--bg-card);border-radius:0;overflow:hidden;max-width:480px;width:100vw;max-height:90vh;display:flex;flex-direction:column}
 .ppm-close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,0.4);color:#fff;border:none;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10}
 .ppm-close:hover{background:rgba(0,0,0,0.6)}
-.ppm-img{width:100%;max-height:60vh;object-fit:contain;background:#000}
+.ppm-img-wrap{position:relative;overflow:hidden;touch-action:pan-y}
+.ppm-carousel{display:flex;transition:transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)}
+.ppm-img-wrap .ppm-img{min-width:100%;max-height:60vh;object-fit:contain;background:#000}
+.ppm-dots{display:flex;gap:6px;justify-content:center;padding:8px 0}
+.ppm-dots span{width:6px;height:6px;border-radius:50%;background:var(--border);cursor:pointer;transition:all 0.2s}
+.ppm-dots span.active{background:var(--text);width:18px;border-radius:3px}
 .ppm-info{padding:14px 16px}
 .ppm-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .ppm-author{font-weight:600;font-size:14px}
@@ -2736,6 +2838,30 @@ body{
 
 /* ============ SCROLL SENTINEL ============ */
 .scroll-sentinel{text-align:center;padding:16px 0;font-size:12px;color:var(--text-light);min-height:20px}
+
+/* ============ UPLOAD MULTI-PHOTO ============ */
+.upload-previews{display:flex;gap:8px;overflow-x:auto;padding:4px 0 8px;-webkit-overflow-scrolling:touch}
+.upload-previews::-webkit-scrollbar{display:none}
+.upload-thumb-item{position:relative;width:80px;height:80px;border-radius:10px;overflow:hidden;flex-shrink:0}
+.upload-thumb-item img{width:100%;height:100%;object-fit:cover}
+.upload-thumb-remove{position:absolute;top:2px;right:2px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(0,0,0,0.5);color:#fff;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+.upload-thumb-add{width:80px;height:80px;border-radius:10px;border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;font-size:24px;color:var(--text-light);transition:all 0.15s}
+.upload-thumb-add:hover{border-color:var(--text-light)}
+.upload-photo-count{font-size:12px;color:var(--text-light);margin-bottom:10px}
+
+/* ============ MULTI-IMAGE BADGE ============ */
+.multi-image-badge{position:absolute;top:10px;right:10px;width:26px;height:26px;border-radius:6px;background:rgba(0,0,0,0.4);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center}
+.multi-image-badge svg{width:14px;height:14px;color:#fff}
+
+/* ============ IMAGE VIEWER ============ */
+.image-viewer-overlay{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.95);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.iv-close{position:absolute;top:12px;right:16px;width:36px;height:36px;border-radius:50%;border:none;background:rgba(255,255,255,0.15);color:#fff;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2}
+.iv-counter{position:absolute;top:16px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.7);font-size:13px;z-index:2}
+.iv-track{display:flex;width:100%;height:100%;transition:transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94);touch-action:pan-y}
+.iv-img{min-width:100%;height:100%;object-fit:contain;user-select:none;-webkit-user-drag:none}
+.iv-dots{display:flex;gap:6px;justify-content:center;position:absolute;bottom:24px;z-index:2}
+.iv-dots span{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.3);transition:all 0.2s}
+.iv-dots span.active{background:#fff;width:18px;border-radius:3px}
 
 /* ============ DARK MODE ============ */
 .dark-mode{

@@ -152,6 +152,17 @@ def init_db():
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
 
+            # Extra images for multi-photo posts
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS letter_photo_extra_images (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    photo_id INT NOT NULL,
+                    filename VARCHAR(255) NOT NULL,
+                    sort_order INT DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+
             # Migrate: add missing columns to existing tables
             for col_def in [
                 ("letter_messages", "likes", "INT DEFAULT 0"),
@@ -571,8 +582,11 @@ def get_photos(token: str = "", page: int = 1, limit: int = 10, feed: str = "all
                     (limit, offset)
                 )
             photos = cursor.fetchall()
+            # Batch load extra images for all photos
+            _load_extra_images(cursor, photos)
             for photo in photos:
                 photo["created_at"] = fmt_time(photo["created_at"])
+                photo["extra_images"] = photo.get("extra_images", [])
                 cursor.execute(
                     "SELECT * FROM letter_comments WHERE photo_id=%s ORDER BY created_at DESC LIMIT 3",
                     (photo["id"],)
@@ -595,6 +609,23 @@ def get_photos(token: str = "", page: int = 1, limit: int = 10, feed: str = "all
         conn.close()
 
 
+def _load_extra_images(cursor, photos):
+    """Attach extra_images list to each photo dict."""
+    if not photos:
+        return
+    photo_ids = [p["id"] for p in photos]
+    ph = ",".join(["%s"] * len(photo_ids))
+    cursor.execute(
+        f"SELECT photo_id, filename, sort_order FROM letter_photo_extra_images WHERE photo_id IN ({ph}) ORDER BY sort_order",
+        photo_ids
+    )
+    extra_map = {}
+    for row in cursor.fetchall():
+        extra_map.setdefault(row["photo_id"], []).append(row["filename"])
+    for photo in photos:
+        photo["extra_images"] = extra_map.get(photo["id"], [])
+
+
 @app.get("/api/photos/my")
 def get_my_photos(token: str = ""):
     if not token:
@@ -612,6 +643,7 @@ def get_my_photos(token: str = ""):
                 (user["user_id"],)
             )
             photos = cursor.fetchall()
+            _load_extra_images(cursor, photos)
             for photo in photos:
                 photo["created_at"] = fmt_time(photo["created_at"])
         return {"code": 200, "data": photos}
@@ -646,16 +678,23 @@ def get_my_messages(token: str = ""):
 
 
 @app.post("/api/photos")
-def upload_photo(file: UploadFile = File(...), caption: str = Form(""),
+def upload_photo(files: list[UploadFile] = File(...), caption: str = Form(""),
                  token: str = Form(None), is_private: int = Form(0),
                  location: str = Form("")):
-    if not file.content_type or not file.content_type.startswith("image/"):
+    saved_files = []
+    for file in files:
+        if not file.content_type or not file.content_type.startswith("image/"):
+            continue
+        ext = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
+        filename = f"{uuid.uuid4().hex}{ext}"
+        filepath = UPLOAD_DIR / filename
+        with open(filepath, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        saved_files.append(filename)
+
+    if not saved_files:
         raise HTTPException(status_code=400, detail="Image only")
-    ext = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
-    filename = f"{uuid.uuid4().hex}{ext}"
-    filepath = UPLOAD_DIR / filename
-    with open(filepath, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+
     user_id = None
     if token:
         payload = decode_token(token)
@@ -664,12 +703,21 @@ def upload_photo(file: UploadFile = File(...), caption: str = Form(""),
     conn = get_db()
     try:
         with conn.cursor() as cursor:
+            # First file goes into letter_photos.filename
+            main_filename = saved_files[0]
             cursor.execute(
                 "INSERT INTO letter_photos (filename, caption, user_id, is_private, location) VALUES (%s, %s, %s, %s, %s)",
-                (filename, caption.strip(), user_id, is_private, location.strip())
+                (main_filename, caption.strip(), user_id, is_private, location.strip())
             )
+            photo_id = cursor.lastrowid
+            # Extra files go into letter_photo_extra_images
+            for idx, extra_fn in enumerate(saved_files[1:], start=1):
+                cursor.execute(
+                    "INSERT INTO letter_photo_extra_images (photo_id, filename, sort_order) VALUES (%s, %s, %s)",
+                    (photo_id, extra_fn, idx)
+                )
         conn.commit()
-        return {"code": 200, "message": "📸", "data": {"filename": filename}}
+        return {"code": 200, "message": "📸", "data": {"filename": main_filename}}
     finally:
         conn.close()
 
@@ -845,6 +893,13 @@ def delete_photo(photo_id: int, token: str = Form("")):
             filepath = UPLOAD_DIR / photo["filename"]
             if filepath.exists():
                 filepath.unlink()
+            # Delete extra images files
+            cursor.execute("SELECT filename FROM letter_photo_extra_images WHERE photo_id = %s", (photo_id,))
+            for row in cursor.fetchall():
+                ef = UPLOAD_DIR / row["filename"]
+                if ef.exists():
+                    ef.unlink()
+            cursor.execute("DELETE FROM letter_photo_extra_images WHERE photo_id = %s", (photo_id,))
             cursor.execute("DELETE FROM letter_photos WHERE id = %s", (photo_id,))
             cursor.execute("DELETE FROM letter_photo_likes WHERE photo_id = %s", (photo_id,))
             cursor.execute("DELETE FROM letter_comments WHERE photo_id = %s", (photo_id,))
@@ -910,6 +965,7 @@ def get_bookmarks(token: str = "", page: int = 1, limit: int = 10):
                 (user["user_id"], limit, offset)
             )
             photos = cursor.fetchall()
+            _load_extra_images(cursor, photos)
             for photo in photos:
                 photo["created_at"] = fmt_time(photo["created_at"])
                 photo["is_bookmarked"] = True
@@ -1268,15 +1324,9 @@ def get_user_photos(user_id: int, token: str = ""):
                     (user_id,)
                 )
             photos = cursor.fetchall()
+            _load_extra_images(cursor, photos)
             for photo in photos:
                 photo["created_at"] = fmt_time(photo["created_at"])
-                cursor.execute(
-                    "SELECT * FROM letter_comments WHERE photo_id=%s ORDER BY created_at DESC LIMIT 3",
-                    (photo["id"],)
-                )
-                photo["recent_comments"] = cursor.fetchall()
-                for c in photo["recent_comments"]:
-                    c["created_at"] = fmt_time(c["created_at"])
         return {"code": 200, "data": photos}
     finally:
         conn.close()
