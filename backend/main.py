@@ -817,6 +817,112 @@ def delete_photo(photo_id: int, token: str = Form("")):
         conn.close()
 
 
+# ============ Stories API ============
+
+@app.get("/api/stories")
+def get_stories(token: str = ""):
+    """获取所有未过期的 stories，按用户分组"""
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """SELECT s.id, s.user_id, s.filename, s.caption, s.created_at,
+                          u.username, u.nickname, u.avatar
+                   FROM letter_stories s
+                   JOIN letter_users u ON s.user_id = u.id
+                   WHERE s.expires_at > NOW()
+                   ORDER BY s.created_at DESC""")
+            rows = cursor.fetchall()
+            if not rows:
+                return {"code": 200, "data": []}
+            # 按用户分组
+            users_map = {}
+            for r in rows:
+                uid = r["user_id"]
+                if uid not in users_map:
+                    users_map[uid] = {
+                        "user_id": uid,
+                        "username": r["username"],
+                        "nickname": r["nickname"],
+                        "avatar": r["avatar"],
+                        "stories": [],
+                    }
+                users_map[uid]["stories"].append({
+                    "id": r["id"],
+                    "filename": r["filename"],
+                    "caption": r["caption"],
+                    "created_at": str(r["created_at"]),
+                })
+            return {"code": 200, "data": list(users_map.values())}
+    finally:
+        conn.close()
+
+
+@app.post("/api/stories")
+def upload_story(file: UploadFile = File(...), caption: str = Form(""),
+                 token: str = Form("")):
+    if not token:
+        raise HTTPException(status_code=401, detail="Login required")
+    user = decode_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Image only")
+    ext = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
+    filename = f"story_{uuid.uuid4().hex}{ext}"
+    filepath = UPLOAD_DIR / filename
+    with open(filepath, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            # 删除该用户旧的未过期 stories（INS 只保留最近一条）
+            cursor.execute(
+                "DELETE FROM letter_stories WHERE user_id=%s AND expires_at > NOW()",
+                (user["user_id"],)
+            )
+            # 如果有旧文件也删除
+            cursor.execute(
+                "SELECT filename FROM letter_stories WHERE user_id=%s",
+                (user["user_id"],)
+            )
+            # 插入新 story，24小时后过期
+            cursor.execute(
+                "INSERT INTO letter_stories (user_id, filename, caption, expires_at) VALUES (%s, %s, %s, DATE_ADD(NOW(), INTERVAL 24 HOUR))",
+                (user["user_id"], filename, caption.strip())
+            )
+        conn.commit()
+        return {"code": 200, "message": "Story uploaded", "data": {"filename": filename}}
+    finally:
+        conn.close()
+
+
+@app.delete("/api/stories/{story_id}")
+def delete_story(story_id: int, token: str = Form("")):
+    if not token:
+        raise HTTPException(status_code=401, detail="Login required")
+    user = decode_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM letter_stories WHERE id=%s", (story_id,))
+            story = cursor.fetchone()
+            if not story:
+                raise HTTPException(status_code=404, detail="Story not found")
+            if "genhwa" not in user.get("username", "") and story["user_id"] != user["user_id"]:
+                raise HTTPException(status_code=403, detail="Not your story")
+            filepath = UPLOAD_DIR / story["filename"]
+            if filepath.exists():
+                filepath.unlink()
+            cursor.execute("DELETE FROM letter_stories WHERE id=%s", (story_id,))
+        conn.commit()
+        return {"code": 200, "message": "Deleted"}
+    finally:
+        conn.close()
+
+
 @app.put("/api/photos/{photo_id}")
 def update_photo(photo_id: int, caption: str = Form(None), is_private: int = Form(None),
                  token: str = Form(""), file: UploadFile = File(None)):
