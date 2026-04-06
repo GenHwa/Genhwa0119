@@ -56,8 +56,9 @@ export const deleteMessage = (id, token) => api.delete(`/api/messages/${id}`, {
 })
 export const likeMessage = (id, userHash) => api.post(`/api/messages/${id}/like`, new URLSearchParams({ user_hash: userHash }))
 
-// Photos
-export const getPhotos = (token = '') => api.get('/api/photos', { params: { token } })
+// Photos (with pagination & feed filter)
+export const getPhotos = (token = '', page = 1, limit = 10, feed = 'all') =>
+  api.get('/api/photos', { params: { token, page, limit, feed } })
 export const getMyPhotos = (token = '') => api.get('/api/photos/my', { params: { token } })
 export const getMyMessages = (token = '') => api.get('/api/messages/my', { params: { token } })
 export const uploadPhoto = (formData) => api.post('/api/photos', formData, {
@@ -82,5 +83,11 @@ export const deletePhoto = (id, token) => api.delete(`/api/photos/${id}`, {
   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   data: new URLSearchParams({ token })
 })
+
+// Bookmarks
+export const toggleBookmark = (photoId, token) => api.post(`/api/photos/${photoId}/bookmark`, new URLSearchParams({ token }))
+export const getBookmarks = (token = '', page = 1, limit = 10) =>
+  api.get('/api/bookmarks', { params: { token, page, limit } })
+export const getBookmarkCount = (token = '') => api.get('/api/bookmarks/count', { params: { token } })
 
 export default api

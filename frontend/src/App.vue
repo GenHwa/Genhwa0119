@@ -243,6 +243,18 @@
           </div>
         </div>
 
+        <!-- Feed Tabs -->
+        <div class="feed-tabs" v-if="currentUser && myStats.following_count > 0">
+          <button :class="['feed-tab', { active: feedTab === 'all' }]" @click="switchFeedTab('all')">{{ t('feedAll') }}</button>
+          <button :class="['feed-tab', { active: feedTab === 'following' }]" @click="switchFeedTab('following')">{{ t('feedFollowing') }}</button>
+        </div>
+
+        <!-- Pull to refresh indicator -->
+        <div class="pull-refresh" :style="{ height: pullDistance + 'px', opacity: pullDistance > 0 ? 1 : 0 }">
+          <span v-if="refreshing">⟳</span>
+          <span v-else-if="pullDistance > 20">↓ {{ t('refreshHint') }}</span>
+        </div>
+
         <!-- Upload Modal -->
         <div v-if="showUploadModal" class="modal-overlay" @click.self="showUploadModal = false">
           <div class="modal">
@@ -325,7 +337,9 @@
                   <svg class="comment-icon" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
               </div>
-              <button class="action-btn" @click="bookmarkEgg">🔖</button>
+              <button :class="['action-btn', { 'bookmark-active': bookmarkedSet.has(photo.id) }]" @click="toggleBookmark(photo)">
+                  <svg class="bookmark-icon" :class="{ filled: bookmarkedSet.has(photo.id) }" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+                </button>
             </div>
 
             <!-- Likes -->
@@ -364,7 +378,13 @@
 
         <div v-else class="empty-state">
           <span class="empty-icon">🎞️</span>
-          <p>{{ t('noPhotos') }}</p>
+          <p>{{ feedTab === 'following' ? t('noFollowingPhotos') : t('noPhotos') }}</p>
+        </div>
+
+        <!-- Infinite scroll sentinel -->
+        <div id="scroll-sentinel" class="scroll-sentinel" v-if="activeSection === 'gallery'">
+          <span v-if="photoLoading">{{ t('loadingMore') }}</span>
+          <span v-else-if="!photoHasMore && photos.length">{{ t('noMorePhotos') }}</span>
         </div>
       </section>
 
@@ -526,6 +546,60 @@
           </div>
         </div>
       </transition>
+
+      <!-- ===== BOOKMARKS ===== -->
+      <section v-if="activeSection === 'bookmarks'" class="section">
+        <div class="section-head">
+          <h2 class="section-title">{{ t('bookmarks') }}</h2>
+          <div class="section-head-actions">
+            <span class="msg-badge">{{ t('bookmarkCount', [bookmarkCount]) }}</span>
+          </div>
+        </div>
+
+        <div class="feed" v-if="bookmarkPhotos.length">
+          <div v-for="photo in bookmarkPhotos" :key="photo.id" class="post-card">
+            <div class="post-header">
+              <div class="post-avatar" :class="{ 'no-avatar-text': photo.author_avatar }">
+                <img v-if="photo.author_avatar" :src="UPLOAD_BASE + photo.author_avatar" class="avatar-img" />
+                <span v-else style="font-size:12px;color:#8e8e8e">●</span>
+              </div>
+              <div class="post-user-info">
+                <span class="post-username">{{ photo.author_name || 'diary' }}</span>
+                <span class="post-location">{{ photo.location || t('inMyHeart') }}</span>
+              </div>
+              <button :class="['action-btn', { 'bookmark-active': true }]" @click="toggleBookmark(photo)" style="font-size:18px">
+                <svg class="bookmark-icon filled" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+              </button>
+            </div>
+            <div class="post-image-wrap" @click="openPhotoDetail(photo)">
+              <img :src="getPhotoUrl(photo.filename)" :alt="photo.caption" loading="lazy" />
+            </div>
+            <div class="post-actions">
+              <div class="post-actions-left">
+                <button :class="['action-btn', { liked: photoLikedSet.has(photo.id) }]" @click="togglePhotoLike(photo)">
+                  <svg class="heart-icon" :class="{ filled: photoLikedSet.has(photo.id) }" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+                </button>
+                <button class="action-btn" @click="openComments(photo)">
+                  <svg class="comment-icon" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="post-likes" v-if="photo.likes > 0">{{ photo.likes }} {{ t('peopleLike') }}</div>
+            <div class="post-caption" v-if="photo.caption">
+              <strong>{{ photo.author_name || 'diary' }}</strong> {{ photo.caption }}
+            </div>
+            <div class="post-time">{{ formatTimeAgo(photo.created_at) }}</div>
+          </div>
+        </div>
+        <div v-else class="empty-state">
+          <span class="empty-icon">🔖</span>
+          <p>{{ t('noBookmarks') }}</p>
+        </div>
+        <div id="scroll-sentinel" class="scroll-sentinel" v-if="activeSection === 'bookmarks'">
+          <span v-if="bookmarkLoading">{{ t('loadingMore') }}</span>
+          <span v-else-if="!bookmarkHasMore && bookmarkPhotos.length">{{ t('noMorePhotos') }}</span>
+        </div>
+      </section>
 
       <!-- ===== MESSAGES / GUESTBOOK ===== -->
       <section v-if="activeSection === 'messages'" class="section">
@@ -744,6 +818,7 @@ const i18n = {
     story1Content: '기분 좋은 하루였어\n바람이 좋았어 🌿',
     story2Content: '소소한 순간들이\n자꾸 기억에 남아 📖',
     story3Content: '앞으로의 이야기도\n기록하고 싶어 ✨',
+    bookmarks: '저장', bookmarked: '저장됨!', unbookmarked: '저장 취소', noBookmarks: '저장한 게시물이 없어요\n관심 있는 글을 저장해보세요!', feedAll: '전체', feedFollowing: '팔로잉', bookmarkCount: (n) => `저장 ${n}개`, refreshHint: '당겨서 새로고침', loadingMore: '불러오는 중...', noMorePhotos: '더 이상 게시물이 없어요', noFollowingPhotos: '팔로우하는 사용자의\n게시물이 아직 없어요',
   },
   en: {
     appTitle: 'diary.', home: 'Home', gallery: 'Feed', messages: 'Board',
@@ -789,6 +864,7 @@ const i18n = {
     story1Content: 'A nice day\nthe breeze was gentle 🌿',
     story2Content: 'Little moments\nstay in my memory 📖',
     story3Content: 'The stories yet to come\nI want to document them too ✨',
+    bookmarks: 'Saved', bookmarked: 'Saved!', unbookmarked: 'Removed', noBookmarks: 'No saved posts yet\nSave posts you love!', feedAll: 'All', feedFollowing: 'Following', bookmarkCount: (n) => `${n} saved`, refreshHint: 'Pull down to refresh', loadingMore: 'Loading...', noMorePhotos: 'No more posts', noFollowingPhotos: 'No posts from people\nyou follow yet',
   },
   ja: {
     appTitle: 'diary.', home: 'ホーム', gallery: 'フィード', messages: '掲示板',
@@ -834,6 +910,7 @@ const i18n = {
     story1Content: '気分のいい一日だった\n風が気持ちよかったよ 🌿',
     story2Content: 'ささやかな瞬間が\nずっと記憶に残ってる 📖',
     story3Content: 'これからの物語も\n記録していきたい ✨',
+    bookmarks: '保存済み', bookmarked: '保存しました!', unbookmarked: '保存解除', noBookmarks: '保存した投稿がありません\n気になる投稿を保存してみましょう!', feedAll: 'すべて', feedFollowing: 'フォロー中', bookmarkCount: (n) => `${n}件保存`, refreshHint: '下に引いて更新', loadingMore: '読み込み中...', noMorePhotos: 'これ以上投稿はありません', noFollowingPhotos: 'フォローしているユーザーの\n投稿がまだありません',
   },
   zh: {
     appTitle: 'diary.', home: '首页', gallery: '动态', messages: '留言板',
@@ -879,6 +956,7 @@ const i18n = {
     story1Content: '心情不错的一天\n风很舒服 🌿',
     story2Content: '细碎的瞬间\n总是留在记忆里 📖',
     story3Content: '以后的故事\n也想继续记录 ✨',
+    bookmarks: '收藏', bookmarked: '已收藏!', unbookmarked: '已取消', noBookmarks: '还没有收藏的动态\n收藏感兴趣的动态吧!', feedAll: '全部', feedFollowing: '关注', bookmarkCount: (n) => `收藏 ${n}条`, refreshHint: '下拉刷新', loadingMore: '加载中...', noMorePhotos: '没有更多动态了', noFollowingPhotos: '还没有关注用户的\n动态发布',
   },
 }
 
@@ -990,6 +1068,27 @@ const userFollowStatus = ref({ is_following: false, following_count: 0, follower
 const headerSearchVal = ref('')
 const headerSearchFocused = ref(false)
 let headerSearchTimer = null
+
+// Feed: pagination & tabs
+const feedTab = ref('all') // 'all' or 'following'
+const photoPage = ref(1)
+const photoHasMore = ref(false)
+const photoLoading = ref(false)
+
+// Bookmarks
+const bookmarkedSet = reactive(new Set())
+const bookmarkPhotos = ref([])
+const bookmarkPage = ref(1)
+const bookmarkHasMore = ref(false)
+const bookmarkLoading = ref(false)
+const bookmarkCount = ref(0)
+
+// Pull to refresh
+const pulling = ref(false)
+const pullDistance = ref(0)
+const refreshing = ref(false)
+let touchStartY = 0
+let mainEl = null
 
 function onHeaderSearchFocus() {
   headerSearchFocused.value = true
@@ -1128,6 +1227,7 @@ const navItems = [
   { id: 'gallery', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>` },
   { id: 'messages', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/></svg>` },
   { id: 'profile', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>` },
+  { id: 'bookmarks', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>` },
   { id: 'settings', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>` },
 ]
 
@@ -1785,19 +1885,185 @@ function eggFloatStyle(i) {
 }
 
 // ============ Fetch ============
-async function fetchPhotos() {
+async function fetchPhotos(append = false) {
+  if (photoLoading.value) return
+  photoLoading.value = true
   try {
     const token = api.getToken()
-    const res = await api.getPhotos(token)
+    const page = append ? photoPage.value : 1
+    const res = await api.getPhotos(token, page, 10, feedTab.value)
     if (res.data.code === 200) {
-      photos.value = res.data.data
+      const newPhotos = res.data.data
+      if (append) {
+        photos.value = [...photos.value, ...newPhotos]
+      } else {
+        photos.value = newPhotos
+      }
+      photoHasMore.value = res.data.has_more
+      if (append) photoPage.value++
+      else photoPage.value = 2
       photos.value.forEach(p => {
         if (p.likes > 0) photoLikedSet.add(p.id)
+        if (p.is_bookmarked) bookmarkedSet.add(p.id)
       })
     }
   } catch (e) { console.error(e) }
+  photoLoading.value = false
   fetchMyContent()
 }
+
+function loadMorePhotos() {
+  if (!photoHasMore.value || photoLoading.value) return
+  fetchPhotos(true)
+}
+
+function switchFeedTab(tab) {
+  if (feedTab.value === tab) return
+  feedTab.value = tab
+  photoPage.value = 1
+  photos.value = []
+  fetchPhotos(false)
+}
+
+// Bookmarks
+async function toggleBookmark(photo) {
+  const token = api.getToken()
+  if (!token) {
+    showToast(t('loginFirst'), 'info')
+    return
+  }
+  try {
+    const res = await api.toggleBookmark(photo.id, token)
+    if (res.data.code === 200) {
+      if (res.data.bookmarked) {
+        bookmarkedSet.add(photo.id)
+        photo.is_bookmarked = true
+        bookmarkCount.value++
+        showToast(t('bookmarked'))
+      } else {
+        bookmarkedSet.delete(photo.id)
+        photo.is_bookmarked = false
+        bookmarkCount.value = Math.max(0, bookmarkCount.value - 1)
+        // Remove from bookmarks page immediately
+        bookmarkPhotos.value = bookmarkPhotos.value.filter(p => p.id !== photo.id)
+        showToast(t('unbookmarked'))
+      }
+    }
+  } catch (e) { console.error(e) }
+}
+
+async function fetchBookmarks(append = false) {
+  if (bookmarkLoading.value) return
+  bookmarkLoading.value = true
+  try {
+    const token = api.getToken()
+    const page = append ? bookmarkPage.value : 1
+    const res = await api.getBookmarks(token, page, 10)
+    if (res.data.code === 200) {
+      const newPhotos = res.data.data
+      if (append) {
+        bookmarkPhotos.value = [...bookmarkPhotos.value, ...newPhotos]
+      } else {
+        bookmarkPhotos.value = newPhotos
+      }
+      bookmarkHasMore.value = res.data.has_more
+      if (append) bookmarkPage.value++
+      else bookmarkPage.value = 2
+    }
+  } catch (e) { console.error(e) }
+  bookmarkLoading.value = false
+}
+
+function loadMoreBookmarks() {
+  if (!bookmarkHasMore.value || bookmarkLoading.value) return
+  fetchBookmarks(true)
+}
+
+async function fetchBookmarkCount() {
+  const token = api.getToken()
+  if (!token) { bookmarkCount.value = 0; return }
+  try {
+    const res = await api.getBookmarkCount(token)
+    if (res.data.code === 200) bookmarkCount.value = res.data.count
+  } catch (e) {}
+}
+
+// Pull to refresh
+function onTouchStart(e) {
+  touchStartY = e.touches[0].clientY
+  if (window.scrollY === 0) {
+    pulling.value = true
+    pullDistance.value = 0
+  }
+}
+function onTouchMove(e) {
+  if (!pulling.value) return
+  const dy = e.touches[0].clientY - touchStartY
+  if (dy > 0 && window.scrollY === 0) {
+    pullDistance.value = Math.min(dy * 0.5, 60)
+  } else {
+    pulling.value = false
+    pullDistance.value = 0
+  }
+}
+async function onTouchEnd() {
+  if (!pulling.value) return
+  pulling.value = false
+  if (pullDistance.value >= 45) {
+    refreshing.value = true
+    pullDistance.value = 0
+    try {
+      photoPage.value = 1
+      await fetchPhotos(false)
+      fetchStats()
+      fetchMyStats()
+    } finally {
+      refreshing.value = false
+    }
+  } else {
+    pullDistance.value = 0
+  }
+}
+
+// Infinite scroll observer
+let scrollObserver = null
+function setupInfiniteScroll() {
+  if (scrollObserver) scrollObserver.disconnect()
+  scrollObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        if (activeSection.value === 'gallery') loadMorePhotos()
+        else if (activeSection.value === 'bookmarks') loadMoreBookmarks()
+      }
+    })
+  }, { rootMargin: '200px' })
+}
+
+function observeSentinel() {
+  nextTick(() => {
+    const el = document.getElementById('scroll-sentinel')
+    if (el) scrollObserver?.observe(el)
+    else scrollObserver?.disconnect()
+  })
+}
+
+// Watch activeSection to trigger data fetch and infinite scroll
+watch(activeSection, (val) => {
+  if (val === 'gallery') {
+    photoPage.value = 1
+    photos.value = []
+    fetchPhotos(false)
+    observeSentinel()
+  } else if (val === 'bookmarks') {
+    bookmarkPage.value = 1
+    bookmarkPhotos.value = []
+    fetchBookmarks(false)
+    fetchBookmarkCount()
+    observeSentinel()
+  } else {
+    scrollObserver?.disconnect()
+  }
+})
 
 async function fetchMessages() {
   try {
@@ -1833,6 +2099,7 @@ function fetchData() {
   fetchMessages()
   fetchStats()
   fetchMyStats()
+  fetchBookmarkCount()
 }
 
 async function fetchMyContent() {
@@ -1858,6 +2125,13 @@ watch(darkMode, (v) => {
 
 onMounted(() => {
   localStorage.setItem('love_user_hash', userHash.value)
+  mainEl = document.querySelector('.main')
+  if (mainEl) {
+    mainEl.addEventListener('touchstart', onTouchStart, { passive: true })
+    mainEl.addEventListener('touchmove', onTouchMove, { passive: true })
+    mainEl.addEventListener('touchend', onTouchEnd)
+  }
+  setupInfiniteScroll()
   checkAuth().then(() => { fetchData(); fetchMyContent() })
   window.addEventListener('keydown', onKeyDown)
   quoteInterval = setInterval(() => {
@@ -1867,6 +2141,12 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
+  if (mainEl) {
+    mainEl.removeEventListener('touchstart', onTouchStart)
+    mainEl.removeEventListener('touchmove', onTouchMove)
+    mainEl.removeEventListener('touchend', onTouchEnd)
+  }
+  scrollObserver?.disconnect()
   if (quoteInterval) clearInterval(quoteInterval)
 })
 </script>
@@ -2435,6 +2715,26 @@ body{
 .toggle-switch input:checked + .toggle-slider{background:var(--accent)}
 .toggle-switch input:checked + .toggle-slider:before{transform:translateX(20px)}
 
+/* ============ FEED TABS ============ */
+.feed-tabs{display:flex;gap:0;padding:0 16px 8px;border-bottom:1px solid var(--border-light)}
+.feed-tab{flex:1;padding:8px 0;border:none;background:transparent;border-bottom:2px solid transparent;font-size:13px;font-weight:500;color:var(--text-light);cursor:pointer;transition:all 0.15s;text-align:center}
+.feed-tab.active{color:var(--text);font-weight:600;border-bottom-color:var(--text)}
+
+/* ============ BOOKMARK ICON ============ */
+.bookmark-icon{width:24px;height:24px;transition:all 0.2s ease;color:var(--text-light)}
+.bookmark-icon.filled{fill:var(--text);stroke:var(--text)}
+.bookmark-active .bookmark-icon{fill:var(--text);stroke:var(--text)}
+.action-btn.bookmark-active:active{transform:scale(0.85)}
+
+/* ============ PULL TO REFRESH ============ */
+.pull-refresh{display:flex;align-items:center;justify-content:center;overflow:hidden;transition:height 0.2s ease;font-size:13px;color:var(--text-light);gap:6px}
+.pull-refresh span{opacity:0.6}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pull-refresh span:first-child{animation:spin 1s linear infinite}
+
+/* ============ SCROLL SENTINEL ============ */
+.scroll-sentinel{text-align:center;padding:16px 0;font-size:12px;color:var(--text-light);min-height:20px}
+
 /* ============ DARK MODE ============ */
 .dark-mode{
   --bg:#0a0a0a;--bg-card:#1a1a1a;--text:#e8e8e8;--text-light:#aaa;
@@ -2510,6 +2810,10 @@ body{
 .dark-mode .upload-caption{color:var(--text)}
 .dark-mode .upload-location{color:var(--text-light)}
 .dark-mode .msg-text{color:var(--text)}
+.dark-mode .feed-tab{color:var(--text-light)}
+.dark-mode .feed-tab.active{color:var(--text);border-bottom-color:var(--text)}
+.dark-mode .bookmark-icon.filled{fill:var(--text);stroke:var(--text)}
+.dark-mode .bookmark-active .bookmark-icon{fill:var(--text);stroke:var(--text)}
 
 /* ============ EASTER EGG ============ */
 .egg-page{position:fixed;inset:0;z-index:9997;background:linear-gradient(135deg,#0a0a0a,#1a1a1a,#0d0d0d);display:flex;align-items:center;justify-content:center;color:#fff;overflow:hidden}

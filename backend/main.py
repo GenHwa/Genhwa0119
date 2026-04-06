@@ -141,6 +141,17 @@ def init_db():
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
 
+            # Bookmarks table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS letter_bookmarks (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    photo_id INT NOT NULL,
+                    user_id INT NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uk_bookmark (photo_id, user_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+
             # Migrate: add missing columns to existing tables
             for col_def in [
                 ("letter_messages", "likes", "INT DEFAULT 0"),
@@ -523,25 +534,41 @@ def like_message(message_id: int, user_hash: str = Form("default")):
 # ============ Photos API ============
 
 @app.get("/api/photos")
-def get_photos(token: str = ""):
+def get_photos(token: str = "", page: int = 1, limit: int = 10, feed: str = "all"):
+    """
+    feed: 'all' = all photos, 'following' = only following users' photos
+    page & limit: pagination support
+    """
     user = None
     if token:
         user = decode_token(token)
+    offset = (page - 1) * limit
     conn = get_db()
     try:
         with conn.cursor() as cursor:
-            if user:
+            if feed == "following" and user:
+                # Only photos from users that current user follows
+                cursor.execute(
+                    "SELECT p.*, u.nickname as author_name, u.avatar as author_avatar FROM letter_photos p "
+                    "INNER JOIN letter_follows f ON p.user_id = f.following_id AND f.follower_id = %s "
+                    "LEFT JOIN letter_users u ON p.user_id = u.id "
+                    "WHERE p.is_private = 0 "
+                    "ORDER BY p.created_at DESC LIMIT %s OFFSET %s",
+                    (user["user_id"], limit, offset)
+                )
+            elif user:
                 cursor.execute(
                     "SELECT p.*, u.nickname as author_name, u.avatar as author_avatar FROM letter_photos p "
                     "LEFT JOIN letter_users u ON p.user_id = u.id "
-                    "WHERE p.is_private = 0 OR p.user_id = %s ORDER BY p.created_at DESC",
-                    (user["user_id"],)
+                    "WHERE p.is_private = 0 OR p.user_id = %s ORDER BY p.created_at DESC LIMIT %s OFFSET %s",
+                    (user["user_id"], limit, offset)
                 )
             else:
                 cursor.execute(
                     "SELECT p.*, u.nickname as author_name, u.avatar as author_avatar FROM letter_photos p "
                     "LEFT JOIN letter_users u ON p.user_id = u.id "
-                    "WHERE p.is_private = 0 ORDER BY p.created_at DESC"
+                    "WHERE p.is_private = 0 ORDER BY p.created_at DESC LIMIT %s OFFSET %s",
+                    (limit, offset)
                 )
             photos = cursor.fetchall()
             for photo in photos:
@@ -553,7 +580,17 @@ def get_photos(token: str = ""):
                 photo["recent_comments"] = cursor.fetchall()
                 for c in photo["recent_comments"]:
                     c["created_at"] = fmt_time(c["created_at"])
-        return {"code": 200, "data": photos}
+                # Check if current user bookmarked this photo
+                if user:
+                    cursor.execute(
+                        "SELECT id FROM letter_bookmarks WHERE photo_id=%s AND user_id=%s",
+                        (photo["id"], user["user_id"])
+                    )
+                    photo["is_bookmarked"] = cursor.fetchone() is not None
+                else:
+                    photo["is_bookmarked"] = False
+            has_more = len(photos) == limit
+        return {"code": 200, "data": photos, "has_more": has_more}
     finally:
         conn.close()
 
@@ -813,6 +850,78 @@ def delete_photo(photo_id: int, token: str = Form("")):
             cursor.execute("DELETE FROM letter_comments WHERE photo_id = %s", (photo_id,))
         conn.commit()
         return {"code": 200, "message": "Deleted"}
+    finally:
+        conn.close()
+
+
+# ============ Bookmarks API ============
+
+@app.post("/api/photos/{photo_id}/bookmark")
+def toggle_bookmark(photo_id: int, token: str = Form("")):
+    if not token:
+        raise HTTPException(status_code=401, detail="Login required")
+    user = decode_token(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT id FROM letter_bookmarks WHERE photo_id=%s AND user_id=%s",
+                (photo_id, user["user_id"])
+            )
+            existing = cursor.fetchone()
+            if existing:
+                cursor.execute(
+                    "DELETE FROM letter_bookmarks WHERE photo_id=%s AND user_id=%s",
+                    (photo_id, user["user_id"])
+                )
+                bookmarked = False
+            else:
+                cursor.execute(
+                    "INSERT INTO letter_bookmarks (photo_id, user_id) VALUES (%s, %s)",
+                    (photo_id, user["user_id"])
+                )
+                bookmarked = True
+        conn.commit()
+        return {"code": 200, "bookmarked": bookmarked}
+    finally:
+        conn.close()
+
+
+@app.get("/api/bookmarks")
+def get_bookmarks(token: str = "", page: int = 1, limit: int = 10):
+    if not token:
+        return {"code": 200, "data": [], "has_more": False}
+    user = decode_token(token)
+    if not user:
+        return {"code": 200, "data": [], "has_more": False}
+    offset = (page - 1) * limit
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT p.*, u.nickname as author_name, u.avatar as author_avatar, b.created_at as bookmarked_at "
+                "FROM letter_bookmarks b "
+                "JOIN letter_photos p ON b.photo_id = p.id "
+                "LEFT JOIN letter_users u ON p.user_id = u.id "
+                "WHERE b.user_id = %s "
+                "ORDER BY b.created_at DESC LIMIT %s OFFSET %s",
+                (user["user_id"], limit, offset)
+            )
+            photos = cursor.fetchall()
+            for photo in photos:
+                photo["created_at"] = fmt_time(photo["created_at"])
+                photo["is_bookmarked"] = True
+                cursor.execute(
+                    "SELECT * FROM letter_comments WHERE photo_id=%s ORDER BY created_at DESC LIMIT 3",
+                    (photo["id"],)
+                )
+                photo["recent_comments"] = cursor.fetchall()
+                for c in photo["recent_comments"]:
+                    c["created_at"] = fmt_time(c["created_at"])
+            has_more = len(photos) == limit
+        return {"code": 200, "data": photos, "has_more": has_more}
     finally:
         conn.close()
 
@@ -1185,6 +1294,23 @@ def get_stats():
             cursor.execute("SELECT COALESCE(SUM(likes),0) as total FROM letter_photos")
             total_likes = cursor.fetchone()["total"]
         return {"code": 200, "data": {"photos": photos, "messages": messages, "total_likes": total_likes}}
+    finally:
+        conn.close()
+
+
+@app.get("/api/bookmarks/count")
+def get_bookmark_count(token: str = ""):
+    if not token:
+        return {"code": 200, "count": 0}
+    user = decode_token(token)
+    if not user:
+        return {"code": 200, "count": 0}
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) as cnt FROM letter_bookmarks WHERE user_id=%s", (user["user_id"],))
+            count = cursor.fetchone()["cnt"]
+        return {"code": 200, "count": count}
     finally:
         conn.close()
 
