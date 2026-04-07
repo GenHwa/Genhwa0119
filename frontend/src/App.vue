@@ -354,7 +354,9 @@
             <div class="post-image-wrap" @dblclick="doubleTapLike(photo, $event)" :class="{ 'multi-image': (photo.extra_images || []).length }">
               <template v-if="(photo.extra_images || []).length">
                 <div class="feed-carousel-wrap"
-                  @touchstart="feedSwipeStart($event, photo)" @touchmove="feedSwipeMove($event, photo)" @touchend="feedSwipeEnd(photo)">
+                  @mouseenter="feedAutoStop(photo.id)" @mouseleave="feedAutoPlay(photo)"
+                  @touchstart="feedSwipeStart($event, photo); feedAutoStop(photo.id)" @touchmove="feedSwipeMove($event, photo)" @touchend="feedSwipeEnd(photo); feedAutoPlay(photo)">
+                  <div class="feed-carousel-progress"><span class="feed-carousel-progress-bar" :key="getFeedIdx(photo)"></span></div>
                   <button v-if="getFeedIdx(photo) > 0" class="feed-carousel-arrow feed-carousel-arrow-left" @click.stop="feedPrev(photo)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                   </button>
@@ -644,7 +646,9 @@
             <div class="post-image-wrap" :class="{ 'multi-image': (photo.extra_images || []).length }">
               <template v-if="(photo.extra_images || []).length">
                 <div class="feed-carousel-wrap"
-                  @touchstart="feedSwipeStart($event, photo)" @touchmove="feedSwipeMove($event, photo)" @touchend="feedSwipeEnd(photo)">
+                  @mouseenter="feedAutoStop(photo.id)" @mouseleave="feedAutoPlay(photo)"
+                  @touchstart="feedSwipeStart($event, photo); feedAutoStop(photo.id)" @touchmove="feedSwipeMove($event, photo)" @touchend="feedSwipeEnd(photo); feedAutoPlay(photo)">
+                  <div class="feed-carousel-progress"><span class="feed-carousel-progress-bar" :key="getFeedIdx(photo)"></span></div>
                   <button v-if="getFeedIdx(photo) > 0" class="feed-carousel-arrow feed-carousel-arrow-left" @click.stop="feedPrev(photo)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                   </button>
@@ -1193,6 +1197,24 @@ function feedNext(photo) {
   const idx = getFeedIdx(photo)
   const total = 1 + (photo.extra_images || []).length
   if (idx < total - 1) feedSwipe.currentIndex[photo.id] = idx + 1
+}
+const feedAutoTimers = {}
+const FEED_AUTO_INTERVAL = 3000
+function feedAutoPlay(photo) {
+  feedAutoStop(photo.id)
+  const total = 1 + (photo.extra_images || []).length
+  if (total <= 1) return
+  feedAutoTimers[photo.id] = setInterval(() => {
+    const idx = getFeedIdx(photo)
+    if (idx < total - 1) {
+      feedSwipe.currentIndex[photo.id] = idx + 1
+    } else {
+      feedSwipe.currentIndex[photo.id] = 0
+    }
+  }, FEED_AUTO_INTERVAL)
+}
+function feedAutoStop(id) {
+  if (feedAutoTimers[id]) { clearInterval(feedAutoTimers[id]); delete feedAutoTimers[id] }
 }
 function feedSwipeStart(e, photo) {
   feedSwipe.currentId = photo.id
@@ -2306,9 +2328,16 @@ watch(darkMode, (v) => {
   localStorage.setItem('diary_dark', v ? '1' : '0')
 })
 
+// Auto-start carousel when photos load
+watch(photos, (val) => { val.forEach(p => { if ((p.extra_images || []).length) feedAutoPlay(p) }) }, { deep: true })
+watch(bookmarkPhotos, (val) => { val.forEach(p => { if ((p.extra_images || []).length) feedAutoPlay(p) }) }, { deep: true })
+
 onMounted(() => {
   localStorage.setItem('love_user_hash', userHash.value)
   mainEl = document.querySelector('.main')
+  // Start autoplay for multi-image posts
+  photos.value.forEach(p => { if ((p.extra_images || []).length) feedAutoPlay(p) })
+  bookmarkPhotos.value.forEach(p => { if ((p.extra_images || []).length) feedAutoPlay(p) })
   if (mainEl) {
     mainEl.addEventListener('touchstart', onTouchStart, { passive: true })
     mainEl.addEventListener('touchmove', onTouchMove, { passive: true })
@@ -2324,6 +2353,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
+  Object.keys(feedAutoTimers).forEach(id => feedAutoStop(id))
   if (mainEl) {
     mainEl.removeEventListener('touchstart', onTouchStart)
     mainEl.removeEventListener('touchmove', onTouchMove)
@@ -2751,6 +2781,9 @@ body{
 .feed-carousel-dots{display:flex;gap:5px;justify-content:center;position:absolute;bottom:8px;left:50%;transform:translateX(-50%);z-index:2}
 .feed-carousel-dots span{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.4);transition:all 0.2s}
 .feed-carousel-dots span.active{background:#fff;width:16px;border-radius:3px}
+.feed-carousel-progress{position:absolute;top:0;left:0;right:0;height:2px;z-index:4;background:rgba(255,255,255,0.25)}
+.feed-carousel-progress-bar{display:block;height:100%;background:#fff;border-radius:0 1px 1px 0;animation:feedProgressFill 3s linear forwards}
+@keyframes feedProgressFill{from{width:0}to{width:100%}}
 
 /* Double tap animation */
 .double-tap-heart{
