@@ -163,6 +163,20 @@ def init_db():
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
             """)
 
+            # DM (Direct Messages) table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS letter_dms (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    sender_id INT NOT NULL,
+                    receiver_id INT NOT NULL,
+                    content TEXT NOT NULL,
+                    is_read TINYINT DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_sender_receiver (sender_id, receiver_id),
+                    INDEX idx_receiver_sender (receiver_id, sender_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+
             # Migrate: add missing columns to existing tables
             for col_def in [
                 ("letter_messages", "likes", "INT DEFAULT 0"),
@@ -1056,6 +1070,112 @@ def get_follow_status(user_id: int, token: str = ""):
         conn.close()
 
 
+@app.get("/api/users/{user_id}/followers")
+def get_followers(user_id: int, token: str = ""):
+    """Get followers list for a user"""
+    current_user = None
+    if token:
+        current_user = decode_token(token)
+    
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            # Get followers (users who follow this user)
+            cursor.execute("""
+                SELECT u.id, u.username, u.nickname, u.avatar, u.created_at
+                FROM letter_users u
+                INNER JOIN letter_follows f ON u.id = f.follower_id
+                WHERE f.following_id = %s
+                ORDER BY f.created_at DESC
+            """, (user_id,))
+            users = cursor.fetchall()
+            
+            for u in users:
+                u["created_at"] = fmt_time(u["created_at"])
+                u["is_following"] = False
+                u["is_mutual"] = False
+                if current_user:
+                    # Check if current user follows this user
+                    cursor.execute("SELECT id FROM letter_follows WHERE follower_id=%s AND following_id=%s",
+                        (current_user["user_id"], u["id"]))
+                    u["is_following"] = cursor.fetchone() is not None
+                    # Check if this user also follows current user (mutual)
+                    cursor.execute("SELECT id FROM letter_follows WHERE follower_id=%s AND following_id=%s",
+                        (u["id"], current_user["user_id"]))
+                    u["is_mutual"] = cursor.fetchone() is not None
+            
+            return {"code": 200, "data": users}
+    finally:
+        conn.close()
+
+
+@app.get("/api/users/{user_id}/following")
+def get_following(user_id: int, token: str = ""):
+    """Get following list for a user"""
+    current_user = None
+    if token:
+        current_user = decode_token(token)
+    
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            # Get following (users this user follows)
+            cursor.execute("""
+                SELECT u.id, u.username, u.nickname, u.avatar, u.created_at
+                FROM letter_users u
+                INNER JOIN letter_follows f ON u.id = f.following_id
+                WHERE f.follower_id = %s
+                ORDER BY f.created_at DESC
+            """, (user_id,))
+            users = cursor.fetchall()
+            
+            for u in users:
+                u["created_at"] = fmt_time(u["created_at"])
+                u["is_following"] = False
+                u["is_mutual"] = False
+                if current_user:
+                    # Check if current user follows this user
+                    cursor.execute("SELECT id FROM letter_follows WHERE follower_id=%s AND following_id=%s",
+                        (current_user["user_id"], u["id"]))
+                    u["is_following"] = cursor.fetchone() is not None
+                    # Check if this user also follows current user (mutual)
+                    cursor.execute("SELECT id FROM letter_follows WHERE follower_id=%s AND following_id=%s",
+                        (u["id"], current_user["user_id"]))
+                    u["is_mutual"] = cursor.fetchone() is not None
+            
+            return {"code": 200, "data": users}
+    finally:
+        conn.close()
+
+
+@app.delete("/api/users/{user_id}/followers/remove")
+def remove_follower(user_id: int, token: str = ""):
+    """Remove a follower (current user removes someone who follows them)"""
+    if not token:
+        raise HTTPException(status_code=401, detail="Login required")
+    current_user = decode_token(token)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # Only allow removing followers if viewing own followers
+    conn = get_db()
+    try:
+        with conn.cursor():
+            # Check if the user is actually following current user (is a follower)
+            cursor.execute("SELECT id FROM letter_follows WHERE follower_id=%s AND following_id=%s",
+                (user_id, current_user["user_id"]))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=400, detail="User is not your follower")
+            
+            # Remove the follow relationship
+            cursor.execute("DELETE FROM letter_follows WHERE follower_id=%s AND following_id=%s",
+                (user_id, current_user["user_id"]))
+        conn.commit()
+        return {"code": 200, "message": "Follower removed"}
+    finally:
+        conn.close()
+
+
 # ============ Stats ============
 
 @app.get("/api/users/search")
@@ -1146,3 +1266,335 @@ def get_bookmark_count(token: str = ""):
 @app.get("/api/health")
 def health_check():
     return {"code": 200, "message": "I'm here for you 💕"}
+
+
+# ============ DM (Direct Messages) ============
+
+@app.get("/api/dm/conversations")
+def get_dm_conversations(token: str = ""):
+    """Get all DM conversations with last message and unread count for each."""
+    if not token:
+        return {"code": 401, "message": "Login required"}
+    
+    current_user = decode_token(token)
+    if not current_user:
+        return {"code": 401, "message": "Invalid token"}
+    
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT DISTINCT 
+                    CASE 
+                        WHEN sender_id = %s THEN receiver_id 
+                        ELSE sender_id 
+                    END as other_user_id
+                FROM letter_dms 
+                WHERE sender_id = %s OR receiver_id = %s
+            """, (current_user["user_id"], current_user["user_id"], current_user["user_id"]))
+            
+            rows = cursor.fetchall()
+            conversations = []
+            
+            for row in rows:
+                other_id = row["other_user_id"]
+                
+                cursor.execute("""
+                    SELECT content, created_at, sender_id, is_read
+                    FROM letter_dms 
+                    WHERE (sender_id = %s AND receiver_id = %s) OR (sender_id = %s AND receiver_id = %s)
+                    ORDER BY created_at DESC LIMIT 1
+                """, (current_user["user_id"], other_id, other_id, current_user["user_id"]))
+                last_msg = cursor.fetchone()
+                
+                cursor.execute("""
+                    SELECT COUNT(*) as cnt FROM letter_dms 
+                    WHERE sender_id = %s AND receiver_id = %s AND is_read = 0
+                """, (other_id, current_user["user_id"]))
+                unread = cursor.fetchone()["cnt"]
+                
+                cursor.execute("""
+                    SELECT id, username, nickname, avatar FROM letter_users WHERE id = %s
+                """, (other_id,))
+                user = cursor.fetchone()
+                
+                # Check if this conversation is pinned
+                cursor.execute("""
+                    SELECT id FROM letter_dm_pins 
+                    WHERE user_id = %s AND other_user_id = %s
+                """, (current_user["user_id"], other_id))
+                is_pinned = cursor.fetchone() is not None
+                
+                if user and last_msg:
+                    from datetime import datetime
+                    created_at = last_msg["created_at"]
+                    if isinstance(created_at, datetime):
+                        time_str = fmt_time(created_at)
+                    else:
+                        time_str = str(created_at)[:16]
+                    
+                    conversations.append({
+                        "user": {
+                            "id": user["id"],
+                            "username": user["username"],
+                            "nickname": user["nickname"],
+                            "avatar": user["avatar"]
+                        },
+                        "last_message": last_msg["content"][:50] + "..." if len(last_msg["content"]) > 50 else last_msg["content"],
+                        "time": time_str,
+                        "unread_count": unread,
+                        "is_pinned": is_pinned
+                    })
+            
+            # Sort: first by time desc, then pinned to top (stable sort)
+            conversations.sort(key=lambda x: x["time"], reverse=True)
+            conversations.sort(key=lambda x: not x["is_pinned"])
+            return {"code": 200, "data": conversations}
+    except Exception as e:
+        return {"code": 500, "message": str(e)}
+    finally:
+        conn.close()
+
+
+@app.get("/api/dm/{other_user_id}")
+def get_dm_history(other_user_id: int, token: str = ""):
+    """Get DM conversation with another user. Check follow status for message limit."""
+    if not token:
+        return {"code": 401, "message": "Login required"}
+    
+    current_user = decode_token(token)
+    if not current_user:
+        return {"code": 401, "message": "Invalid token"}
+    
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            # Check if mutual follow
+            cursor.execute("""
+                SELECT id FROM letter_follows 
+                WHERE follower_id = %s AND following_id = %s
+            """, (current_user["user_id"], other_user_id))
+            i_follow = cursor.fetchone() is not None
+            
+            cursor.execute("""
+                SELECT id FROM letter_follows 
+                WHERE follower_id = %s AND following_id = %s
+            """, (other_user_id, current_user["user_id"]))
+            follows_me = cursor.fetchone() is not None
+            
+            is_mutual = i_follow and follows_me
+            
+            # Get other user info
+            cursor.execute("SELECT id, username, nickname, avatar FROM letter_users WHERE id = %s", (other_user_id,))
+            other_user = cursor.fetchone()
+            if not other_user:
+                return {"code": 404, "message": "User not found"}
+            
+            # Get messages (limited if not mutual)
+            limit = 50 if is_mutual else 3
+            
+            cursor.execute("""
+                SELECT id, sender_id, receiver_id, content, is_read, created_at 
+                FROM letter_dms 
+                WHERE (sender_id = %s AND receiver_id = %s) OR (sender_id = %s AND receiver_id = %s)
+                ORDER BY created_at ASC LIMIT %s
+            """, (current_user["user_id"], other_user_id, other_user_id, current_user["user_id"], limit))
+            messages = cursor.fetchall()
+            for m in messages:
+                m["created_at"] = fmt_time(m["created_at"])
+            
+            # Get sent count for non-mutual
+            cursor.execute("""
+                SELECT COUNT(*) as cnt FROM letter_dms 
+                WHERE sender_id = %s AND receiver_id = %s
+            """, (current_user["user_id"], other_user_id))
+            sent_count = cursor.fetchone()["cnt"]
+            
+            return {
+                "code": 200, 
+                "data": {
+                    "user": other_user,
+                    "messages": messages,
+                    "is_mutual": is_mutual,
+                    "sent_count": sent_count,
+                    "can_send_unlimited": is_mutual
+                }
+            }
+    finally:
+        conn.close()
+
+
+@app.post("/api/dm/{other_user_id}")
+def send_dm(other_user_id: int, token: str = "", content: str = ""):
+    """Send DM to another user. Check follow status for message limit."""
+    if not token:
+        return {"code": 401, "message": "Login required"}
+    
+    current_user = decode_token(token)
+    if not current_user:
+        return {"code": 401, "message": "Invalid token"}
+    
+    if not content or not content.strip():
+        return {"code": 400, "message": "Content required"}
+    
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            # Check if mutual follow
+            cursor.execute("""
+                SELECT id FROM letter_follows 
+                WHERE follower_id = %s AND following_id = %s
+            """, (current_user["user_id"], other_user_id))
+            i_follow = cursor.fetchone() is not None
+            
+            cursor.execute("""
+                SELECT id FROM letter_follows 
+                WHERE follower_id = %s AND following_id = %s
+            """, (other_user_id, current_user["user_id"]))
+            follows_me = cursor.fetchone() is not None
+            
+            is_mutual = i_follow and follows_me
+            
+            # Check sent count for non-mutual
+            cursor.execute("""
+                SELECT COUNT(*) as cnt FROM letter_dms 
+                WHERE sender_id = %s AND receiver_id = %s
+            """, (current_user["user_id"], other_user_id))
+            sent_count = cursor.fetchone()["cnt"]
+            
+            # Apply limit if not mutual
+            if not is_mutual and sent_count >= 3:
+                return {"code": 403, "message": "Limit reached. Mutual follow required for unlimited messages."}
+            
+            # Insert message
+            cursor.execute("""
+                INSERT INTO letter_dms (sender_id, receiver_id, content)
+                VALUES (%s, %s, %s)
+            """, (current_user["user_id"], other_user_id, content.strip()))
+            
+            conn.commit()
+            return {"code": 200, "message": "DM sent"}
+    except Exception as e:
+        return {"code": 500, "message": str(e)}
+    finally:
+        conn.close()
+
+
+@app.get("/api/dm/unread")
+def get_unread_dm_count(token: str = ""):
+    """Get count of unread DM messages (messages where I'm the receiver and is_read=0)."""
+    if not token:
+        return {"code": 401, "message": "Login required"}
+    
+    current_user = decode_token(token)
+    if not current_user:
+        return {"code": 401, "message": "Invalid token"}
+    
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            # Get unread count (count DMs where I'm the receiver and is_read=0)
+            cursor.execute("""
+                SELECT COUNT(*) as cnt FROM letter_dms 
+                WHERE receiver_id = %s AND is_read = 0
+            """, (current_user["user_id"],))
+            result = cursor.fetchone()
+            return {"code": 200, "data": {"unread_count": result["cnt"]}}
+    finally:
+        conn.close()
+
+
+@app.put("/api/dm/{other_user_id}/read")
+def mark_dm_as_read(other_user_id: int, token: str = ""):
+    """Mark all messages from a conversation as read."""
+    if not token:
+        return {"code": 401, "message": "Login required"}
+    
+    current_user = decode_token(token)
+    if not current_user:
+        return {"code": 401, "message": "Invalid token"}
+    
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            # Mark all messages from this user as read
+            cursor.execute("""
+                UPDATE letter_dms 
+                SET is_read = 1 
+                WHERE sender_id = %s AND receiver_id = %s AND is_read = 0
+            """, (other_user_id, current_user["user_id"]))
+            conn.commit()
+            return {"code": 200, "message": "Marked as read"}
+    finally:
+        conn.close()
+
+
+@app.delete("/api/dm/{other_user_id}")
+def delete_dm_conversation(other_user_id: int, token: str = ""):
+    """Delete DM conversation (all messages with another user)."""
+    if not token:
+        return {"code": 401, "message": "Login required"}
+    
+    current_user = decode_token(token)
+    if not current_user:
+        return {"code": 401, "message": "Invalid token"}
+    
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            # Delete all messages between these two users
+            cursor.execute("""
+                DELETE FROM letter_dms 
+                WHERE (sender_id = %s AND receiver_id = %s) OR (sender_id = %s AND receiver_id = %s)
+            """, (current_user["user_id"], other_user_id, other_user_id, current_user["user_id"]))
+            conn.commit()
+            return {"code": 200, "message": "Conversation deleted"}
+    except Exception as e:
+        return {"code": 500, "message": str(e)}
+    finally:
+        conn.close()
+
+
+@app.put("/api/dm/{other_user_id}/pin")
+def pin_dm_conversation(other_user_id: int, token: str = "", pin: int = 1):
+    """Pin or unpin a DM conversation (using a priority field)."""
+    if not token:
+        return {"code": 401, "message": "Login required"}
+    
+    current_user = decode_token(token)
+    if not current_user:
+        return {"code": 401, "message": "Invalid token"}
+    
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            # Check if aDmPins table exists, if not create it
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS letter_dm_pins (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    other_user_id INT NOT NULL,
+                    pinned_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY unique_user_other (user_id, other_user_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+            
+            if pin:
+                # Insert or update pin
+                cursor.execute("""
+                    INSERT INTO letter_dm_pins (user_id, other_user_id, pinned_at)
+                    VALUES (%s, %s, NOW())
+                    ON DUPLICATE KEY UPDATE pinned_at = NOW()
+                """, (current_user["user_id"], other_user_id))
+            else:
+                # Remove pin
+                cursor.execute("""
+                    DELETE FROM letter_dm_pins WHERE user_id = %s AND other_user_id = %s
+                """, (current_user["user_id"], other_user_id))
+            
+            conn.commit()
+            return {"code": 200, "message": "Pinned" if pin else "Unpinned"}
+    except Exception as e:
+        return {"code": 500, "message": str(e)}
+    finally:
+        conn.close()

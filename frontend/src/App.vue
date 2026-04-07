@@ -8,7 +8,7 @@
     <!-- Header -->
     <header class="header">
       <div class="header-inner">
-        <h1 class="logo" @click="logoClicks++; checkLogoEgg(); activeSection = 'home'">
+        <h1 class="logo" @click="logoClicks++; checkLogoEgg(); activeSection = 'gallery'">
           <svg class="logo-icon" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="8" r="3" fill="currentColor"/><path d="M16 11v10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="M11 18l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
           <span class="logo-text">onul.</span>
         </h1>
@@ -40,7 +40,7 @@
     <!-- Login Page -->
     <section v-if="activeSection === 'login'" class="section">
       <div class="login-page">
-        <div class="lp-logo" @click="activeSection = 'home'">
+        <div class="lp-logo" @click="activeSection = 'gallery'">
           <svg class="lp-logo-icon" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="8" r="3" fill="currentColor"/><path d="M16 11v10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="M11 18l5 5 5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
           <span class="logo-text">onul.</span>
         </div>
@@ -119,17 +119,18 @@
               <button v-if="currentUser && currentUser.id !== viewingUser.id" class="sp-up-follow" :class="{ following: userFollowStatus.is_following }" @click.stop="toggleFollow">
                 {{ userFollowStatus.is_following ? t('following') : t('follow') }}
               </button>
+              <button v-if="currentUser && currentUser.id !== viewingUser.id" class="sp-up-dm" @click.stop="openDmModal(viewingUser)">✉️</button>
             </div>
             <div class="sp-up-stats">
-              <div class="sp-up-stat">
+              <div class="sp-up-stat" @click.stop="openFollowList('posts')">
                 <span class="sp-up-stat-num">{{ userFollowStatus.posts_count }}</span>
                 <span class="sp-up-stat-label">{{ t('posts') }}</span>
               </div>
-              <div class="sp-up-stat">
+              <div class="sp-up-stat" @click.stop="openFollowList('followers')">
                 <span class="sp-up-stat-num">{{ userFollowStatus.followers_count }}</span>
                 <span class="sp-up-stat-label">{{ t('followers') }}</span>
               </div>
-              <div class="sp-up-stat">
+              <div class="sp-up-stat" @click.stop="openFollowList('following')">
                 <span class="sp-up-stat-num">{{ userFollowStatus.following_count }}</span>
                 <span class="sp-up-stat-label">{{ t('following') }}</span>
               </div>
@@ -151,12 +152,97 @@
       </div>
     </transition>
 
+    <!-- Follow List Modal -->
+    <transition name="fade">
+      <div v-if="followListModal.show" class="modal-overlay" @click.self="followListModal.show = false">
+        <div class="follow-list-modal">
+          <div class="flm-header">
+            <h3>{{ followListModal.type === 'followers' ? t('followers') : followListModal.type === 'following' ? t('following') : t('posts') }}</h3>
+            <button class="flm-close" @click="followListModal.show = false">×</button>
+          </div>
+          <div class="flm-content">
+            <div v-if="followListModal.loading" class="flm-loading">{{ t('loadingMore') }}</div>
+            <div v-else-if="!followListModal.users.length" class="flm-empty">{{ followListModal.type === 'followers' ? 'No followers yet' : 'Not following anyone' }}</div>
+            <div v-else class="flm-list">
+              <div v-for="user in followListModal.users" :key="user.id" class="flm-item" @click="viewUserProfile(user); followListModal.show = false">
+                <img :src="getPhotoUrl(user.avatar)" class="flm-avatar" />
+                <div class="flm-info">
+                  <span class="flm-name">{{ user.nickname || user.username }}</span>
+                  <span class="flm-id">@{{ user.username }} <span v-if="user.is_mutual" class="flm-mutual">{{ t('mutual') }}</span></span>
+                </div>
+                <!-- Show different buttons based on context -->
+                <template v-if="currentUser">
+                  <!-- In my followers list: show remove button -->
+                  <button v-if="followListModal.isMyProfile && followListModal.type === 'followers' && currentUser.id !== user.id" class="flm-btn flm-remove" @click.stop="removeFollowerFromList(user.id)">
+                    {{ t('remove') }}
+                  </button>
+                  <!-- In my following list: show unfollow button -->
+                  <button v-else-if="followListModal.isMyProfile && followListModal.type === 'following' && currentUser.id !== user.id" class="flm-btn flm-remove" @click.stop="toggleFollowFromList(user.id)">
+                    {{ t('following') }}
+                  </button>
+                  <!-- In others' list: show follow/unfollow -->
+                  <button v-else-if="!followListModal.isMyProfile && currentUser.id !== user.id" class="flm-btn" :class="{ following: user.is_following }" @click.stop="toggleFollowFromList(user.id)">
+                    {{ user.is_following ? t('following') : t('follow') }}
+                  </button>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <!-- DM Modal -->
+    <transition name="fade">
+      <div v-if="dmModal.show" class="modal-overlay" @click.self="dmModal.show = false">
+        <div class="dm-modal">
+          <div class="dm-header">
+            <button class="dm-close" @click="dmModal.show = false">←</button>
+            <h3>{{ dmModal.user?.nickname || dmModal.user?.username || '私信' }}</h3>
+            <span></span>
+          </div>
+          <div class="dm-content">
+            <div v-if="dmModal.loading" class="dm-loading">{{ t('loadingMore') }}</div>
+            <div v-else-if="!dmModal.canSendUnlimited" class="dm-limit-hint">
+              <span v-if="dmModal.sentCount >= 3">⚠️ {{ t('dmLimit1') }}</span>
+              <span v-else>{{ t('dmLimit2', [dmModal.sentCount]) }}</span>
+            </div>
+            <div v-if="dmModal.messages.length" class="dm-list">
+              <div v-for="(msg, idx) in dmModal.messages" :key="idx" 
+                :class="['dm-item', { 'dm-mine': msg.sender_id === currentUser?.id }]">
+                <div class="dm-bubble">{{ msg.content }}</div>
+                <div class="dm-meta">
+                  <span class="dm-time">{{ msg.created_at }}</span>
+                  <span v-if="msg.sender_id !== currentUser?.id && msg.is_read" class="dm-read">✓✓</span>
+                </div>
+              </div>
+            </div>
+            <div v-else class="dm-empty">{{ t('noMessages') }}</div>
+          </div>
+          <div class="dm-input-wrap">
+            <div class="dm-input-box">
+              <input v-model="dmModal.newMessage" type="text" 
+                :placeholder="dmModal.canSendUnlimited ? t('dmPlaceholder') : dmModal.sentCount >= 3 ? t('dmLimitReached') : t('dmPlaceholder')" 
+                :disabled="!dmModal.canSendUnlimited && dmModal.sentCount >= 3"
+                @keyup.enter="sendDmMessage" />
+              <button class="dm-send-btn" @click="sendDmMessage" 
+                :disabled="!dmModal.newMessage.trim() || (!dmModal.canSendUnlimited && dmModal.sentCount >= 3)"
+                :class="{ active: !!dmModal.newMessage.trim() }">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+
     <!-- Bottom Nav -->
     <nav v-if="currentUser" class="bottom-nav">
       <button v-for="item in navItems" :key="item.id"
         :class="['bnav-btn', { active: activeSection === item.id }]"
         @click="navigateTo(item.id)">
         <span class="bnav-icon" v-html="item.svg"></span>
+        <span v-if="item.id === 'dm' && unreadDmCount > 0" class="dm-badge">{{ unreadDmCount > 99 ? '99+' : unreadDmCount }}</span>
         <span class="bnav-label">{{ t(item.id) }}</span>
       </button>
     </nav>
@@ -502,19 +588,36 @@
 
         <!-- My Content -->
         <div v-else>
+          <!-- Stories -->
+          <div class="stories-bar" v-if="currentUser">
+            <div class="story-item add-story" @click="addStory">
+              <div class="story-ring">
+                <div class="story-thumb">{{ currentUser.nickname?.charAt(0) || currentUser.username?.charAt(0) || '+' }}</div>
+              </div>
+              <span class="story-name">{{ t('add') }}</span>
+            </div>
+            <div class="story-item" v-for="s in myStories" :key="s.id"
+              :class="{ viewed: s.viewed }" @click="viewStory(s)">
+              <div class="story-ring">
+                <div class="story-thumb">{{ s.icon }}</div>
+              </div>
+              <span class="story-name">{{ s.name }}</span>
+            </div>
+          </div>
+
           <!-- My Stats -->
           <div class="profile-stats">
-            <div class="pstat">
+            <div class="pstat" @click="openFollowList('posts', true)">
               <span class="pstat-num">{{ myStats.posts_count }}</span>
               <span class="pstat-label">{{ t('posts') }}</span>
             </div>
             <div class="pstat-divider"></div>
-            <div class="pstat">
+            <div class="pstat" @click="openFollowList('followers', true)">
               <span class="pstat-num">{{ myStats.followers_count }}</span>
               <span class="pstat-label">{{ t('followers') }}</span>
             </div>
             <div class="pstat-divider"></div>
-            <div class="pstat">
+            <div class="pstat" @click="openFollowList('following', true)">
               <span class="pstat-num">{{ myStats.following_count }}</span>
               <span class="pstat-label">{{ t('following') }}</span>
             </div>
@@ -583,10 +686,65 @@
                 <button class="ppm-btn" @click="togglePhotoPrivate(profilePhotoModal)"><span class="icon-line" v-html="profilePhotoModal.is_private ? icons.lock : icons.unlock"></span></button>
                 <button class="ppm-btn ppm-delete" @click="handleDeletePhoto(profilePhotoModal.id); profilePhotoModal = null"><span class="icon-line icon-delete" v-html="icons.trash"></span></button>
               </div>
+              <!-- Photo Comments -->
+              <div class="ppm-comments" v-if="photoComments.length">
+                <div v-for="c in photoComments" :key="c.id" class="ppm-comment">
+                  <span class="pc-author">{{ c.nickname || c.username }}:</span>
+                  <span class="pc-text">{{ c.content }}</span>
+                </div>
+                <div v-if="photoComments.length >= 3" class="pc-more" @click="openComments(profilePhotoModal)">查看全部评论</div>
+              </div>
             </div>
           </div>
         </div>
       </transition>
+
+      <!-- ===== DM / Messages ===== -->
+      <section v-if="activeSection === 'dm'" class="section">
+        <div class="section-head">
+          <h2 class="section-title">{{ t('messages') || '私信' }}</h2>
+        </div>
+
+        <div v-if="!currentUser" class="profile-login-required">
+          <p>{{ t('loginFirst') }}</p>
+          <button class="btn-primary" @click="activeSection = 'login'">{{ t('login') }}</button>
+        </div>
+
+        <div v-else class="dm-list-page">
+          <div v-if="dmConversations.length === 0" class="dm-empty">{{ t('noMessages') || '暂无私信' }}</div>
+          <div v-else>
+            <div v-for="conv in dmConversations" :key="conv.user.id" 
+              class="dm-conv-item-wrap" 
+              :data-user-id="conv.user.id"
+              @touchstart.passive="onDmItemTouchStart($event, conv.user.id)"
+              @touchmove.prevent="onDmItemTouchMove($event, conv.user.id)"
+              @touchend="onDmItemTouchEnd(conv.user.id)"
+              @mousedown="onDmItemMouseDown($event, conv.user.id)">
+              <div class="dm-conv-actions">
+                <button class="dm-action-btn pin-btn" @click.stop="pinDmConv(conv.user.id)">
+                  <span class="btn-icon">{{ conv.isPinned ? '📌' : '📍' }}</span>
+                  {{ conv.isPinned ? t('unpin') : t('pin') }}
+                </button>
+                <button class="dm-action-btn delete-btn" @click.stop="deleteDmConv(conv.user.id)">
+                  <span class="btn-icon">🗑️</span>
+                  {{ t('deleteMsg') }}
+                </button>
+              </div>
+              <div class="dm-conv-item" :class="{ pinned: conv.isPinned }" @click="openDmModal(conv.user)">
+                <img :src="getPhotoUrl(conv.user.avatar)" class="dm-conv-avatar" />
+                <div class="dm-conv-info">
+                  <span class="dm-conv-name">{{ conv.user.nickname || conv.user.username }}</span>
+                  <span class="dm-conv-preview">{{ conv.last_message }}</span>
+                </div>
+                <div class="dm-conv-meta">
+                  <span class="dm-conv-time">{{ conv.time }}</span>
+                  <span v-if="conv.unread_count > 0" class="dm-unread-badge">{{ conv.unread_count }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <!-- ===== BOOKMARKS ===== -->
       <section v-if="activeSection === 'bookmarks'" class="section">
@@ -719,9 +877,12 @@
         <div class="sv-bar">
           <div class="sv-progress"></div>
         </div>
-        <div class="sv-content">
-          <div class="sv-emoji">{{ viewingStory.icon }}</div>
-          <p class="sv-text">{{ viewingStory.content }}</p>
+        <div class="sv-content" :class="{ 'sv-has-image': viewingStory.image }">
+          <img v-if="viewingStory.image" :src="viewingStory.image" class="sv-img" />
+          <template v-else>
+            <div class="sv-emoji">{{ viewingStory.icon }}</div>
+            <p class="sv-text">{{ viewingStory.content }}</p>
+          </template>
         </div>
         <div class="sv-user">
           <span class="sv-name">{{ viewingStory.name }}</span>
@@ -772,7 +933,7 @@ const languages = [
 
 const i18n = {
   ko: {
-    appTitle: 'onul.', home: '홈', gallery: '갤러리',
+    appTitle: 'onul.', home: '홈', gallery: '갤러리', dm: '메시지', profile: '프로필', bookmarks: '저장', settings: '설정',
     profileBio: '소소한 일상 기록 ✦',
     photos: '게시물', msgCount: '개 글', likes: '좋아요',
     heroLine1: '기억하고 싶은 순간들을', heroLine2: '여기에 모아두려고 해',
@@ -782,7 +943,7 @@ const i18n = {
     noPhotos: '아직 사진이 없어요\n첫 사진을 올려보세요!',
     noComments: '아직 댓글이 없어요',
     searchUser: '사용자 검색...', noSearchResult: '검색 결과가 없어요', searchAll: '사용자, 게시물 검색...', users: '사용자',
-    follow: '팔로우', following: '팔로잉', followers: '팔로워', posts: '게시물', followDone: '팔로우 완료 ✨', unfollowDone: '팔로우 취소',
+    follow: '팔로우', following: '팔로잉', followers: '팔로워', posts: '게시물', followDone: '팔로우 완료 ✨', unfollowDone: '팔로우 취소', mutual: '맞팔', remove: '차단', followerRemoved: '팔로워 제거됨', add: '추가', messages: '메시지', noMessages: '아직 메시지가 없어요', storyPosted: '스토리 게시됨 ✨', pin: '고정', unpin: '고정 해제', dmLimit1: '단방향 팔로우 시 최대 3개 메시지', dmLimit2: (n) => `${n}/3개 전송됨 (맞팔 후 무제한)`, dmLimitReached: '도달', dmPlaceholder: '메시지 보내기...', dmSend: '보내기', dmSendFail: '실패', dmDeleteConfirm: '이 대화를 삭제할까요?',
     comments: '댓글',
     footer: 'everyday',
     mood_love: '평온', mood_happy: '행복', mood_miss: '그리움', mood_shy: '수줍음', mood_star: '별',
@@ -815,7 +976,7 @@ const i18n = {
     bookmarks: '저장', bookmarked: '저장됨!', unbookmarked: '저장 취소', noBookmarks: '저장한 게시물이 없어요\n관심 있는 글을 저장해보세요!', feedAll: '전체', feedFollowing: '팔로잉', bookmarkCount: (n) => `저장 ${n}개`, refreshHint: '당겨서 새로고침', loadingMore: '불러오는 중...', noMorePhotos: '더 이상 게시물이 없어요', noFollowingPhotos: '팔로우하는 사용자의\n게시물이 아직 없어요', addMorePhotos: '사진 더 추가', maxPhotosReached: '최대 10장까지', photoCount: (n) => `${n}/10`,
   },
   en: {
-    appTitle: 'onul.', home: 'Home', gallery: 'Feed',
+    appTitle: 'onul.', home: 'Home', gallery: 'Feed', dm: 'Messages', profile: 'Profile', bookmarks: 'Saved', settings: 'Settings',
     profileBio: 'little moments ✦',
     photos: 'Posts', msgCount: 'msgs', likes: 'Likes',
     heroLine1: 'Moments I want to remember', heroLine2: 'collected here',
@@ -825,7 +986,7 @@ const i18n = {
     noPhotos: 'No photos yet\nUpload the first one!',
     noComments: 'No comments yet',
     searchUser: 'Search users...', noSearchResult: 'No results found', searchAll: 'Search users, posts...', users: 'Users',
-    follow: 'Follow', following: 'Following', followers: 'Followers', posts: 'Posts', followDone: 'Followed ✨', unfollowDone: 'Unfollowed',
+    follow: 'Follow', following: 'Following', followers: 'Followers', posts: 'Posts', followDone: 'Followed ✨', unfollowDone: 'Unfollowed', mutual: 'Mutual', remove: 'Remove', followerRemoved: 'Follower removed', add: 'Add', messages: 'Messages', noMessages: 'No messages yet', storyPosted: 'Story posted ✨', pin: 'Pin', unpin: 'Unpin', dmLimit1: 'Max 3 messages for one-way follow', dmLimit2: (n) => `${n}/3 sent (unlimited after mutual)`, dmLimitReached: 'Limit reached', dmPlaceholder: 'Send message...', dmSend: 'Send', dmSendFail: 'Failed', dmDeleteConfirm: 'Delete this conversation?',
     comments: 'Comments',
     footer: 'everyday',
     mood_love: 'Calm', mood_happy: 'Happy', mood_miss: 'Miss', mood_shy: 'Shy', mood_star: 'Star',
@@ -858,7 +1019,7 @@ const i18n = {
     bookmarks: 'Saved', bookmarked: 'Saved!', unbookmarked: 'Removed', noBookmarks: 'No saved posts yet\nSave posts you love!', feedAll: 'All', feedFollowing: 'Following', bookmarkCount: (n) => `${n} saved`, refreshHint: 'Pull down to refresh', loadingMore: 'Loading...', noMorePhotos: 'No more posts', noFollowingPhotos: 'No posts from people\nyou follow yet', addMorePhotos: 'Add more photos', maxPhotosReached: 'Max 10 photos', photoCount: (n) => `${n}/10`,
   },
   ja: {
-    appTitle: 'onul.', home: 'ホーム', gallery: 'フィード',
+    appTitle: 'onul.', home: 'ホーム', gallery: 'フィード', dm: 'メッセージ', profile: 'プロフィール', bookmarks: '保存済み', settings: '設定',
     profileBio: 'ささやかな日々の記録 ✦',
     photos: '投稿', msgCount: '件', likes: 'いいね',
     heroLine1: '覚えておきたい瞬間を', heroLine2: 'ここに集めるね',
@@ -868,7 +1029,7 @@ const i18n = {
     noPhotos: 'まだ写真がありません\n最初の写真を投稿しましょう！',
     noComments: 'まだコメントがありません',
     searchUser: 'ユーザー検索...', noSearchResult: '検索結果がありません', searchAll: 'ユーザー、投稿を検索...', users: 'ユーザー',
-    follow: 'フォロー', following: 'フォロー中', followers: 'フォロワー', posts: '投稿', followDone: 'フォローしました ✨', unfollowDone: 'フォロー解除',
+    follow: 'フォロー', following: 'フォロー中', followers: 'フォロワー', posts: '投稿', followDone: 'フォローしました ✨', unfollowDone: 'フォロー解除', mutual: '相互フォロー', remove: '削除', followerRemoved: 'フォロワーを削除しました', add: '追加', messages: 'メッセージ', noMessages: 'メッセージはまだありません', storyPosted: 'ストーリーを投稿しました ✨', pin: 'ピン留め', unpin: 'ピン解除', dmLimit1: '片思料は最大3通', dmLimit2: (n) => `${n}/3送信済み ( 맞팔後は無制限)`, dmLimitReached: '上限', dmPlaceholder: 'メッセージを入力...', dmSend: '送信', dmSendFail: '失敗', dmDeleteConfirm: 'この会話を削除しますか?',
     comments: 'コメント',
     footer: 'everyday',
     mood_love: '穏やか', mood_happy: '嬉しい', mood_miss: '会いたい', mood_shy: '恥ずかしい', mood_star: '星',
@@ -901,7 +1062,7 @@ const i18n = {
     bookmarks: '保存済み', bookmarked: '保存しました!', unbookmarked: '保存解除', noBookmarks: '保存した投稿がありません\n気になる投稿を保存してみましょう!', feedAll: 'すべて', feedFollowing: 'フォロー中', bookmarkCount: (n) => `${n}件保存`, refreshHint: '下に引いて更新', loadingMore: '読み込み中...', noMorePhotos: 'これ以上投稿はありません', noFollowingPhotos: 'フォローしているユーザーの\n投稿がまだありません', addMorePhotos: '写真を追加', maxPhotosReached: '最大10枚まで', photoCount: (n) => `${n}/10`,
   },
   zh: {
-    appTitle: 'onul.', home: '首页', gallery: '动态',
+    appTitle: 'onul.', home: '首页', gallery: '动态', dm: '私信', profile: '主页', bookmarks: '收藏', settings: '设置',
     profileBio: '细碎日常记录 ✦',
     photos: '动态', msgCount: '条留言', likes: '获赞',
     heroLine1: '想把记住的瞬间', heroLine2: '都留在这里',
@@ -911,7 +1072,7 @@ const i18n = {
     noPhotos: '还没有照片\n发第一条动态吧！',
     noComments: '还没有评论',
     searchUser: '搜索用户...', noSearchResult: '没有找到结果', searchAll: '搜索用户、动态...', users: '用户',
-    follow: '关注', following: '已关注', followers: '粉丝', posts: '作品', followDone: '关注成功 ✨', unfollowDone: '已取消关注',
+    follow: '关注', following: '已关注', followers: '粉丝', posts: '作品', followDone: '关注成功 ✨', unfollowDone: '已取消关注', mutual: '互关', remove: '移除', followerRemoved: '已移除粉丝', add: '添加', messages: '私信', noMessages: '暂无私信', storyPosted: 'Story已发布 ✨', pin: '置顶', unpin: '取消置顶', dmLimit1: '单方关注最多3条消息', dmLimit2: (n) => `已发送 ${n}/3条 (互关后无限制)`, dmLimitReached: '已达上限', dmPlaceholder: '发送消息...', dmSend: '发送', dmSendFail: '发送失败', dmDeleteConfirm: '确定删除此对话吗？',
     comments: '评论',
     footer: 'everyday',
     mood_love: '平静', mood_happy: '开心', mood_miss: '想念', mood_shy: '害羞', mood_star: '星星',
@@ -952,7 +1113,7 @@ function t(key, params) {
 }
 
 // ============ State ============
-const activeSection = ref('home')
+const activeSection = ref('gallery')
 const photos = ref([])
 const stats = reactive({ photos: 0, messages: 0, total_likes: 0 })
 const myStats = reactive({ posts_count: 0, following_count: 0, followers_count: 0 })
@@ -981,6 +1142,7 @@ const savingProfile = ref(false)
 const changingPwd = ref(false)
 const profileTab = ref('photos')
 const profilePhotoModal = ref(null)
+const photoComments = ref([])
 
 // Computed: my content
 const myPhotos = ref([])
@@ -1015,7 +1177,7 @@ const showEggPage = ref(false)
 const eggClick = ref(0)
 const logoClicks = ref(0)
 const showStoryViewer = ref(false)
-const viewingStory = reactive({ icon: '', name: '', content: '' })
+const viewingStory = reactive({ icon: '', name: '', content: '', image: '' })
 const currentQuote = ref(0)
 const konamiCode = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a']
 const konamiIndex = ref(0)
@@ -1033,6 +1195,45 @@ const searchInput = ref(null)
 const viewingUser = ref(null)
 const userPhotos = ref([])
 const userFollowStatus = ref({ is_following: false, following_count: 0, followers_count: 0, posts_count: 0 })
+
+// Follow list modal
+const followListModal = reactive({ show: false, type: '', users: [], loading: false, isMyProfile: false, targetUserId: null })
+
+// DM Modal
+const dmModal = reactive({
+  show: false,
+  user: null,
+  messages: [],
+  loading: false,
+  canSendUnlimited: false,
+  sentCount: 0,
+  newMessage: ''
+})
+
+// DM Conversations list (for DM page)
+const dmConversations = ref([])
+
+// Unread DM count for nav badge
+const unreadDmCount = ref(0)
+
+// DM swipe state
+const dmSwipeState = reactive({})
+
+async function loadDmConversations() {
+  if (!currentUser.value) return
+  const token = api.getToken()
+  try {
+    const res = await api.getDmConversations(token)
+    if (res.data.code === 200) {
+      dmConversations.value = (res.data.data || []).map(c => ({
+        ...c,
+        isPinned: !!c.is_pinned
+      }))
+    }
+  } catch (e) {
+    console.error('Failed to load DM conversations:', e)
+  }
+}
 
 // Header inline search
 const headerSearchVal = ref('')
@@ -1176,6 +1377,7 @@ async function onUserSearch() {
 }
 
 async function viewUserProfile(user) {
+  showSearchPanel.value = true
   viewingUser.value = user
   userPhotos.value = []
   userFollowStatus.value = { is_following: false, following_count: 0, followers_count: 0, posts_count: 0 }
@@ -1213,6 +1415,179 @@ async function toggleFollow() {
     }
   } catch (e) {}
 }
+
+async function openFollowList(type, isMyProfile = false) {
+  const userId = isMyProfile ? currentUser.value.id : viewingUser.value?.id
+  if (!userId) return
+  
+  followListModal.show = true
+  followListModal.type = type
+  followListModal.loading = true
+  followListModal.users = []
+  followListModal.isMyProfile = isMyProfile
+  followListModal.targetUserId = userId
+  
+  try {
+    const token = api.getToken()
+    let res
+    if (type === 'followers') {
+      res = await api.getFollowers(userId, token)
+    } else if (type === 'following') {
+      res = await api.getFollowing(userId, token)
+    } else {
+      // posts - just close and switch tab
+      followListModal.show = false
+      if (isMyProfile) {
+        activeSection.value = 'profile'
+        profileTab.value = 'photos'
+      } else {
+        showSearchPanel.value = false
+        activeSection.value = 'gallery'
+      }
+      return
+    }
+    if (res.data.code === 200) {
+      followListModal.users = res.data.data || []
+    }
+  } catch (e) {
+    console.error('Failed to load follow list:', e)
+  } finally {
+    followListModal.loading = false
+  }
+}
+
+async function toggleFollowFromList(userId) {
+  const token = api.getToken()
+  if (!token) {
+    showToast(t('loginFirst'), 'info')
+    return
+  }
+  try {
+    const res = await api.followUser(userId, token)
+    if (res.data.code === 200) {
+      const idx = followListModal.users.findIndex(u => u.id === userId)
+      if (idx !== -1) {
+        followListModal.users[idx].is_following = res.data.followed
+      }
+      // Update my stats
+      if (followListModal.isMyProfile) {
+        if (followListModal.type === 'following') {
+          // In following list - update following_count
+          if (res.data.followed) {
+            myStats.following_count += 1
+          } else {
+            myStats.following_count = Math.max(0, myStats.following_count - 1)
+            showToast(t('unfollowDone'))
+          }
+        } else {
+          // In followers list - update followers_count
+          if (res.data.followed) {
+            myStats.followers_count += 1
+          } else {
+            myStats.followers_count = Math.max(0, myStats.followers_count - 1)
+          }
+        }
+      }
+    }
+  } catch (e) {}
+}
+
+async function removeFollowerFromList(userId) {
+  const token = api.getToken()
+  if (!token) {
+    showToast(t('loginFirst'), 'info')
+    return
+  }
+  try {
+    const res = await api.removeFollower(userId, token)
+    if (res.data.code === 200) {
+      // Remove from list
+      const idx = followListModal.users.findIndex(u => u.id === userId)
+      if (idx !== -1) {
+        followListModal.users.splice(idx, 1)
+      }
+      myStats.followers_count = Math.max(0, myStats.followers_count - 1)
+      showToast(t('followerRemoved') || 'Removed')
+    }
+  } catch (e) {
+    console.error('Failed to remove follower:', e)
+  }
+}
+
+async function openDmModal(user) {
+  if (!currentUser.value) {
+    showToast(t('loginFirst'), 'info')
+    return
+  }
+  dmModal.show = true
+  dmModal.user = user
+  dmModal.loading = true
+  dmModal.messages = []
+  dmModal.newMessage = ''
+  
+  const token = api.getToken()
+  try {
+    const res = await api.getDmHistory(user.id, token)
+    if (res.data.code === 200) {
+      dmModal.messages = res.data.data.messages || []
+      dmModal.canSendUnlimited = res.data.data.can_send_unlimited
+      dmModal.sentCount = res.data.data.sent_count || 0
+    }
+  } catch (e) {
+    console.error('Failed to load DM:', e)
+  } finally {
+    dmModal.loading = false
+    // Mark messages as read
+    try {
+      await api.markDmAsRead(user.id, token)
+      fetchUnreadDmCount()
+    } catch (e) {}
+    // Scroll to bottom after loading messages
+    nextTick(() => {
+      const dmContent = document.querySelector('.dm-content')
+      if (dmContent) dmContent.scrollTop = dmContent.scrollHeight
+    })
+  }
+}
+
+async function sendDmMessage() {
+  if (!dmModal.newMessage.trim()) return
+  const token = api.getToken()
+  if (!token) {
+    showToast(t('loginFirst'), 'info')
+    return
+  }
+  
+  // Check limit
+  if (!dmModal.canSendUnlimited && dmModal.sentCount >= 3) {
+    showToast(t('dmLimit1') + ' - ' + t('dmLimitReached'), 'warn')
+    return
+  }
+  
+  try {
+    const res = await api.sendDm(dmModal.user.id, dmModal.newMessage.trim(), token)
+    if (res.data.code === 200) {
+      dmModal.messages.push({
+        sender_id: currentUser.value.id,
+        receiver_id: dmModal.user.id,
+        content: dmModal.newMessage.trim(),
+        created_at: t('timeJustNow')
+      })
+      dmModal.newMessage = ''
+      dmModal.sentCount++
+      // Scroll to bottom
+      nextTick(() => {
+        const dmContent = document.querySelector('.dm-content')
+        if (dmContent) dmContent.scrollTop = dmContent.scrollHeight
+      })
+    } else {
+      showToast(res.data.message || t('dmSendFail'), 'warn')
+    }
+  } catch (e) {
+    showToast(t('dmSendFail'), 'warn')
+  }
+}
+
 const toast = reactive({ show: false, message: '', type: 'success' })
 
 // Confirm dialog
@@ -1244,12 +1619,66 @@ const stories = ref([
   { id: 2, icon: '🌙', name: 'story', content: '', viewed: false },
   { id: 3, icon: '🌸', name: 'story', content: '', viewed: false },
 ])
+const myStories = ref([])
+
+function addStory() {
+  if (!currentUser.value) {
+    showToast(t('loginFirst'), 'info')
+    return
+  }
+  // Trigger file input for story
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'image/*'
+  input.onchange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('token', api.getToken())
+    fd.append('caption', '')
+    
+    try {
+      const res = await api.uploadStory(fd)
+      if (res.data.code === 200) {
+        showToast(t('storyPosted') || 'Story已发布', 'success')
+        loadMyStories()
+      } else {
+        showToast(res.data.message || '发布失败', 'warn')
+      }
+    } catch (err) {
+      showToast('发布失败', 'warn')
+    }
+  }
+  input.click()
+}
+
+async function loadMyStories() {
+  if (!currentUser.value) return
+  const token = api.getToken()
+  try {
+    const res = await api.getStories(token)
+    if (res.data.code === 200) {
+      const myData = res.data.data.find(u => u.user_id === currentUser.value.id)
+      if (myData) {
+        myStories.value = myData.stories.map(s => ({
+          id: s.id,
+          icon: '📷',
+          name: 'My Story',
+          content: s.caption,
+          filename: s.filename,
+          viewed: false
+        }))
+      }
+    }
+  } catch (e) {}
+}
 
 // Nav
 const navItems = [
-  { id: 'home', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>` },
   { id: 'gallery', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>` },
-
+  { id: 'dm', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>` },
   { id: 'profile', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>` },
   { id: 'bookmarks', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>` },
   { id: 'settings', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>` },
@@ -1396,6 +1825,18 @@ function isPhotoOwner(photo) {
 function openPhotoDetail(photo) {
   profilePhotoModal.value = photo
   imageViewer.current = 0
+  // Load comments for this photo
+  loadPhotoComments(photo.id)
+}
+
+async function loadPhotoComments(photoId) {
+  photoComments.value = []
+  try {
+    const res = await api.getComments(photoId)
+    if (res.data.code === 200) {
+      photoComments.value = (res.data.data || []).slice(0, 3) // Only first 3
+    }
+  } catch (e) {}
 }
 
 function isCommentOwner(comment) {
@@ -1792,9 +2233,16 @@ function viewStory(s) {
   s.viewed = true
   viewingStory.icon = s.icon
   viewingStory.name = s.name
-  const lang = currentLang.value
-  const key = `story${s.id}Content`
-  viewingStory.content = i18n[lang]?.[key] || i18n['ko']?.[key] || ''
+  // If it's an uploaded story with image, show image
+  if (s.filename) {
+    viewingStory.content = ''
+    viewingStory.image = UPLOAD_BASE + s.filename
+  } else {
+    viewingStory.image = ''
+    const lang = currentLang.value
+    const key = `story${s.id}Content`
+    viewingStory.content = i18n[lang]?.[key] || i18n['ko']?.[key] || ''
+  }
   showStoryViewer.value = true
   setTimeout(() => { showStoryViewer.value = false }, 4000)
 }
@@ -1941,6 +2389,183 @@ async function fetchBookmarkCount() {
   } catch (e) {}
 }
 
+async function fetchUnreadDmCount() {
+  const token = api.getToken()
+  if (!token) { unreadDmCount.value = 0; return }
+  try {
+    const res = await api.getUnreadDmCount(token)
+    if (res.data.code === 200) unreadDmCount.value = res.data.data?.unread_count || 0
+  } catch (e) {}
+}
+
+// DM item swipe handlers
+function onDmItemTouchStart(e, userId) {
+  dmSwipeState[userId] = { 
+    startX: e.touches[0].clientX, 
+    startTime: Date.now(),
+    translateX: 0,
+    isSwiping: false
+  }
+}
+
+function onDmItemTouchMove(e, userId) {
+  const state = dmSwipeState[userId]
+  if (!state) return
+  
+  const currentX = e.touches[0].clientX
+  const diff = currentX - state.startX
+  
+  // Only start tracking after moved a bit to distinguish from scroll
+  if (Math.abs(diff) > 10 && !state.isSwiping) {
+    state.isSwiping = true
+  }
+  
+  if (state.isSwiping) {
+    // Prevent default scrolling when swiping horizontally
+    e.preventDefault()
+    
+    // Only allow left swipe (negative), max -140px for full button reveal
+    state.translateX = diff < 0 ? Math.max(diff, -140) : 0
+    
+    const wrap = document.querySelector(`.dm-conv-item-wrap[data-user-id="${userId}"]`)
+    if (wrap) {
+      const itemEl = wrap.querySelector('.dm-conv-item')
+      if (itemEl) itemEl.style.transform = `translateX(${state.translateX}px)`
+    }
+  }
+}
+
+function onDmItemTouchEnd(userId) {
+  const state = dmSwipeState[userId]
+  if (!state) return
+  
+  // Snap to -140px (fully open) if swiped enough (>60px or fast swipe), otherwise close
+  const shouldOpen = state.translateX < -60 || (Date.now() - state.startTime < 200 && state.translateX < -40)
+  
+  if (shouldOpen) {
+    state.translateX = -140
+  } else {
+    state.translateX = 0
+  }
+  
+  const wrap = document.querySelector(`.dm-conv-item-wrap[data-user-id="${userId}"]`)
+  if (wrap) {
+    const itemEl = wrap.querySelector('.dm-conv-item')
+    if (itemEl) itemEl.style.transform = `translateX(${state.translateX}px)`
+  }
+}
+
+// Reset all swipes when clicking elsewhere
+function resetAllDmSwipes() {
+  document.querySelectorAll('.dm-conv-item-wrap .dm-conv-item').forEach(el => {
+    el.style.transform = 'translateX(0)'
+  })
+}
+
+// Mouse drag support for desktop
+let dmMouseState = null
+
+function onDmItemMouseDown(e, userId) {
+  // Only handle left click, and not on buttons
+  if (e.button !== 0 || e.target.closest('button')) return
+  
+  dmMouseState = { 
+    startX: e.clientX, 
+    userId,
+    isDragging: false
+  }
+  
+  const onMouseMove = (moveEvent) => {
+    if (!dmMouseState || dmMouseState.userId !== userId) return
+    
+    const diff = moveEvent.clientX - dmMouseState.startX
+    
+    if (!dmMouseState.isDragging && Math.abs(diff) > 8) {
+      dmMouseState.isDragging = true
+      e.preventDefault()
+    }
+    
+    if (dmMouseState.isDragging) {
+      moveEvent.preventDefault()
+      const translateX = diff < 0 ? Math.max(diff, -140) : 0
+      
+      const wrap = document.querySelector(`.dm-conv-item-wrap[data-user-id="${userId}"]`)
+      if (wrap) {
+        const itemEl = wrap.querySelector('.dm-conv-item')
+        if (itemEl) itemEl.style.transform = `translateX(${translateX}px)`
+      }
+    }
+  }
+  
+  const onMouseUp = () => {
+    if (!dmMouseState || dmMouseState.userId !== userId) {
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+      dmMouseState = null
+      return
+    }
+    
+    if (dmMouseState.isDragging) {
+      const wrap = document.querySelector(`.dm-conv-item-wrap[data-user-id="${userId}"]`)
+      if (wrap) {
+        const itemEl = wrap.querySelector('.dm-conv-item')
+        if (itemEl) {
+          const currentTransform = itemEl.style.transform
+          const match = currentTransform.match(/translateX\((-?\d+)px\)/)
+          const currentX = match ? parseInt(match[1]) : 0
+          
+          if (currentX < -60) {
+            itemEl.style.transform = 'translateX(-140px)'
+          } else {
+            itemEl.style.transform = 'translateX(0)'
+          }
+        }
+      }
+      
+      e.preventDefault()
+    }
+    
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', onMouseUp)
+    dmMouseState = null
+  }
+  
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+}
+
+// Pin/unpin DM conversation
+async function pinDmConv(userId) {
+  const conv = dmConversations.value.find(c => c.user.id === userId)
+  if (!conv) return
+  const newPin = !conv.isPinned
+  try {
+    const res = await api.pinDmConversation(userId, newPin ? 1 : 0, api.getToken())
+    if (res.data.code === 200) {
+      conv.isPinned = newPin
+      // Re-sort: pinned first, then by time desc
+      dmConversations.value.sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1
+        if (!a.isPinned && b.isPinned) return 1
+        return (b.time || '').localeCompare(a.time || '')
+      })
+      showToast(newPin ? t('pin') + ' ✓' : t('unpin') + ' ✓')
+    }
+  } catch (e) {}
+}
+
+// Delete DM conversation
+async function deleteDmConv(userId) {
+  if (!confirm(t('dmDeleteConfirm'))) return
+  try {
+    const res = await api.deleteDmConversation(userId, api.getToken())
+    if (res.data.code === 200) {
+      dmConversations.value = dmConversations.value.filter(c => c.user.id !== userId)
+      showToast(t('deleteMsg') + ' ✓')
+    }
+  } catch (e) {}
+}
+
 // Pull to refresh
 function onTouchStart(e) {
   touchStartY = e.touches[0].clientY
@@ -2013,6 +2638,8 @@ watch(activeSection, (val) => {
     fetchBookmarks(false)
     fetchBookmarkCount()
     observeSentinel()
+  } else if (val === 'dm') {
+    loadDmConversations()
   } else {
     scrollObserver?.disconnect()
   }
@@ -2043,6 +2670,7 @@ function fetchData() {
   fetchStats()
   fetchMyStats()
   fetchBookmarkCount()
+  fetchUnreadDmCount()
 }
 
 async function fetchMyContent() {
@@ -2134,7 +2762,7 @@ onUnmounted(() => {
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 :root{
   --bg:#f2f2f2;--bg-card:#ffffff;--text:#2a2a2a;--text-light:#999;
-  --accent:#5a5a5a;--accent-light:#f5f5f5;--accent-soft:#eaeaea;
+  --accent:#5a5a5a;--accent-rgb:90,90,90;--accent-light:#f5f5f5;--accent-soft:#eaeaea;
   --accent-deep:#3a3a3a;--gradient-soft:linear-gradient(135deg, #f5f5f5 0%, #eeeeee 50%, #f0f0f0 100%);
   --gradient-accent:linear-gradient(135deg, #888, #bbb);
   --border:#e0e0e0;--border-light:#ededed;
@@ -2300,6 +2928,60 @@ body{
 .sp-msg-name{font-size:13px;font-weight:600;color:var(--text)}
 .sp-msg-content{font-size:13px;color:var(--text-light);margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .sp-empty{text-align:center;padding:60px 20px;color:var(--text-light);font-size:14px}
+
+/* Follow List Modal */
+.follow-list-modal{background:var(--bg-card);border-radius:16px;width:100%;max-width:420px;max-height:80vh;display:flex;flex-direction:column;animation:slideUp .2s}
+.flm-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+.flm-header h3{font-size:16px;font-weight:600;color:var(--text)}
+.flm-close{font-size:24px;background:none;border:none;color:var(--text-light);cursor:pointer;padding:0;line-height:1}
+.flm-content{flex:1;overflow-y:auto;padding:10px 0}
+.flm-loading,.flm-empty{text-align:center;padding:40px 20px;color:var(--text-light);font-size:14px}
+.flm-list{}
+.flm-item{display:flex;align-items:center;padding:12px 20px;cursor:pointer}
+.flm-item:hover{background:var(--bg)}
+.flm-avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;background:var(--bg);margin-right:12px}
+.flm-info{flex:1;min-width:0}
+.flm-name{display:block;font-weight:500;color:var(--text);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.flm-id{display:block;font-size:12px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.flm-btn{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;background:var(--accent);color:#fff;border:none;transition:all .2s}
+.flm-btn.following{background:var(--bg);color:var(--text-light);border:1px solid var(--border)}
+.flm-btn.flm-remove{background:var(--bg);color:var(--text-light);border:1px solid var(--border)}
+.flm-mutual{color:var(--accent);font-size:11px;font-weight:500}
+
+/* DM Modal */
+.dm-modal{background:var(--bg-card);border-radius:20px;width:100%;max-width:420px;height:72vh;display:flex;flex-direction:column;animation:slideUp .25s ease-out;box-shadow:0 8px 40px rgba(0,0,0,0.12)}
+.dm-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;background:linear-gradient(135deg, rgba(var(--accent-rgb),0.05) 0%, transparent 60%)}
+.dm-header h3{font-size:16px;font-weight:700;color:var(--text);letter-spacing:-0.2px}
+.dm-close{width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:50%;color:var(--text);cursor:pointer;font-size:18px;border:none;transition:all .2s}
+.dm-close:hover,.dm-close:active{background:var(--bg-light);transform:scale(0.95)}
+.dm-content{flex:1;overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch;scroll-behavior:smooth}
+.dm-content::-webkit-scrollbar{width:3px}
+.dm-content::-webkit-scrollbar-thumb{background:transparent;border-radius:3px}
+.dm-content:hover::-webkit-scrollbar-thumb{background:rgba(128,128,128,0.3)}
+.dm-loading,.dm-empty{text-align:center;padding:50px 20px;color:var(--text-light);font-size:13.5px;line-height:1.6}
+.dm-limit-hint{text-align:center;padding:9px 12px;font-size:11.5px;color:var(--accent);background:linear-gradient(135deg, rgba(var(--accent-rgb),0.08) 0%, rgba(var(--accent-rgb),0.03) 100%);border-radius:10px;margin-bottom:12px;border:1px solid rgba(var(--accent-rgb),0.1)}
+.dm-list{display:flex;flex-direction:column;gap:6px;min-height:0}
+.dm-item{display:flex;flex-direction:column;max-width:78%;animation:msgIn .2s ease-out}
+@keyframes msgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.dm-item.dm-mine{align-self:flex-end;align-items:flex-end}
+.dm-bubble{padding:10px 16px;border-radius:18px;font-size:14px;line-height:1.5;word-break:break-word;background:var(--bg);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,0.04)}
+.dm-item:not(.dm-mine) .dm-bubble{border-bottom-left-radius:5px}
+.dm-item.dm-mine .dm-bubble{background:linear-gradient(135deg,var(--accent) 0%, color-mix(in srgb,var(--accent),#fff 10%) 100%);color:#fff;box-shadow:0 2px 8px rgba(var(--accent-rgb),0.25);border-bottom-right-radius:5px}
+.dm-meta{display:flex;align-items:center;gap:5px;margin-top:5px;padding:0 2px}
+.dm-time{font-size:10.5px;color:var(--text-light);opacity:0.7}
+.dm-read{font-size:11px;color:var(--accent);font-weight:600;letter-spacing:1px}
+.dm-input-wrap{padding:14px 16px 16px;background:var(--bg);border-top:1px solid rgba(0,0,0,0.06)}
+.dm-input-box{display:flex;align-items:center;gap:8px;background:var(--bg-card);border-radius:26px;padding:4px 6px 4px 16px;border:1.5px solid rgba(0,0,0,0.08);transition:border-color .2s,box-shadow .2s}
+.dm-input-box:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),0.12)}
+.dm-input-box input{flex:1;border:none;background:transparent;font-size:14px;color:var(--text);padding:10px 4px;outline:none;min-width:0}
+.dm-input-box input::placeholder{color:var(--text-light);opacity:0.6}
+.dm-input-box input:disabled{opacity:0.5;cursor:not-allowed}
+.dm-send-btn{width:38px;height:38px;display:flex;align-items:center;justify-content:center;background:var(--bg-light);border-radius:50%;border:none;color:var(--text-light);cursor:pointer;transition:all .25s cubic-bezier(.4,0,.2,1);flex-shrink:0}
+.dm-send-btn.active{background:linear-gradient(135deg,var(--accent) 0%, color-mix(in srgb,var(--accent),#fff 15%) 100%);color:#fff;box-shadow:0 3px 10px rgba(var(--accent-rgb),0.35)}
+.dm-send-btn.active:hover{transform:scale(1.08);box-shadow:0 4px 14px rgba(var(--accent-rgb),0.45)}
+.dm-send-btn.active:active{transform:scale(0.95)}
+.dm-send-btn:disabled{cursor:not-allowed;opacity:0.4}
+
 .sp-user-profile{flex:1;overflow-y:auto;display:flex;flex-direction:column}
 .sp-up-header{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border-light);cursor:pointer;background:var(--bg-card)}
 .sp-up-back{font-size:18px;color:var(--text);padding:4px 6px;border-radius:8px;transition:all 0.15s}
@@ -2311,15 +2993,39 @@ body{
 .sp-up-meta{flex:1;min-width:0}
 .sp-up-meta h3{font-size:16px;font-weight:600;margin-bottom:2px}
 .sp-up-meta p{font-size:13px;color:var(--text-light)}
-.sp-up-follow{padding:6px 18px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px solid var(--text);background:var(--bg-card);color:var(--text);transition:all 0.2s}
+.sp-up-follow{padding:6px 18px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px solid var(--text);background:var(--bg-card);color:var(--text);transition:all 0.2s;margin-right:8px}
 .sp-up-follow.following{background:var(--bg);color:var(--text-light);border-color:var(--border)}
 .sp-up-follow:active{transform:scale(0.96)}
+.sp-up-dm{padding:6px 10px;border-radius:8px;font-size:13px;cursor:pointer;background:var(--bg);border:1px solid var(--border);transition:all 0.2s}
+.sp-up-dm:active{transform:scale(0.96)}
 .sp-up-stats{display:flex;gap:0;padding:0 16px 16px;border-bottom:1px solid var(--border-light)}
 .sp-up-stat{flex:1;text-align:center;padding:10px 0}
 .sp-up-stat-num{display:block;font-size:16px;font-weight:600;color:var(--text)}
 .sp-up-stat-label{font-size:12px;color:var(--text-light)}
 .sp-up-photos{padding:0 2px}
 .sp-up-empty{text-align:center;padding:40px 20px;color:var(--text-light);font-size:14px}
+
+/* DM List Page */
+.dm-list-page{padding:0}
+.dm-empty{text-align:center;padding:60px 20px;color:var(--text-light);font-size:14px}
+.dm-conv-item-wrap{position:relative;overflow:hidden;-webkit-overflow-scrolling:touch}
+.dm-conv-actions{position:absolute;right:0;top:0;bottom:0;display:flex;align-items:center;z-index:1;width:140px;flex-shrink:0;gap:6px;padding:0 8px}
+.dm-action-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;height:56px;font-size:11px;font-weight:600;border:none;cursor:pointer;flex:1;border-radius:12px;transition:transform 0.15s,opacity 0.15s;letter-spacing:0.3px}
+.dm-action-btn:active{transform:scale(0.92);opacity:0.85}
+.pin-btn{background:linear-gradient(135deg,#FFD43B,#F59F00);color:#5a3e00;box-shadow:0 2px 8px rgba(245,159,0,0.3)}
+.pin-btn .btn-icon{font-size:18px;margin-bottom:2px}
+.delete-btn{background:linear-gradient(135deg,#FF6B6B,#EE5A24);color:#fff;box-shadow:0 2px 8px rgba(238,90,36,0.3)}
+.delete-btn .btn-icon{font-size:18px;margin-bottom:2px}
+.dm-conv-item{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border-light);cursor:pointer;background:var(--bg-card);position:relative;z-index:2;transition:transform 0.25s ease-out;will-change:transform}
+.dm-conv-item:active{background:var(--bg)}
+.dm-conv-item.pinned{background:var(--bg-light)}
+.dm-conv-avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;background:var(--bg);margin-right:12px;flex-shrink:0}
+.dm-conv-info{flex:1;min-width:0;overflow:hidden}
+.dm-conv-name{display:block;font-weight:600;color:var(--text);font-size:14px;margin-bottom:2px}
+.dm-conv-preview{display:block;font-size:13px;color:var(--text-light);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dm-conv-meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;margin-left:8px}
+.dm-conv-time{font-size:11px;color:var(--text-light);white-space:nowrap}
+.dm-unread-badge{min-width:18px;height:18px;padding:0 5px;background:var(--accent);border-radius:9px;font-size:10px;font-weight:600;color:#fff;display:flex;align-items:center;justify-content:center}
 
 /* ============ BOTTOM NAV ============ */
 .bottom-nav{
@@ -2338,8 +3044,9 @@ body{
 .bnav-btn:hover{opacity:0.7}
 .bnav-btn.active .bnav-icon svg{stroke-width:2.2}
 .bnav-btn.active .bnav-label{color:var(--text);font-weight:600}
-.bnav-icon{width:24px;height:24px;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);display:flex;align-items:center;justify-content:center}
+.bnav-icon{width:24px;height:24px;transition:all 0.3s cubic-bezier(0.4,0,0.2,1);display:flex;align-items:center;justify-content:center;position:relative}
 .bnav-icon svg{width:22px;height:22px}
+.dm-badge{position:absolute;top:-4px;right:-6px;min-width:16px;height:16px;padding:0 4px;background:#ff3b30;border-radius:8px;font-size:9px;font-weight:600;color:#fff;display:flex;align-items:center;justify-content:center;line-height:1}
 .bnav-label{font-size:10px;letter-spacing:0.3px;transition:all 0.3s cubic-bezier(0.4,0,0.2,1)}
 
 /* ============ MAIN ============ */
@@ -2437,6 +3144,11 @@ body{
 .ppm-caption{font-size:14px;line-height:1.4;margin-bottom:10px}
 .ppm-stats{font-size:13px;color:var(--text-light);display:flex;gap:16px}
 .ppm-actions{display:flex;gap:8px;margin-top:10px}
+.ppm-comments{max-height:100px;overflow-y:auto;margin-top:8px;padding-top:8px;border-top:1px solid var(--border-light)}
+.ppm-comment{font-size:13px;margin-bottom:4px}
+.pc-author{font-weight:600;margin-right:4px}
+.pc-text{}
+.pc-more{font-size:12px;color:var(--accent);cursor:pointer;margin-top:4px}
 .ppm-btn{padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;transition:all 0.15s;font-family:inherit}
 .ppm-btn:hover{background:var(--border-light)}
 .ppm-delete:hover{background:#fff0f0;border-color:#ed4956;color:#ed4956}
@@ -2447,6 +3159,8 @@ body{
 .stories-bar::-webkit-scrollbar{display:none}
 .story-item{display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;flex-shrink:0;scroll-snap-align:start;transition:transform 0.15s ease}
 .story-item:hover{transform:scale(1.03)}
+.story-item.add-story .story-ring{background:var(--bg);border:2px dashed var(--border)}
+.story-item.add-story .story-thumb{background:var(--bg-card);color:var(--accent);font-size:20px;font-weight:600}
 .story-ring{padding:3px;border-radius:50%;background:linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)}
 .story-item.viewed .story-ring{background:var(--border)}
 .story-thumb{width:56px;height:56px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:24px;border:2px solid var(--bg-card)}
@@ -2623,7 +3337,7 @@ body{
 .cp-back,.cp-close{border:none;background:transparent;font-size:18px;cursor:pointer;padding:6px 8px;border-radius:8px;transition:all 0.15s ease;color:var(--text)}
 .cp-back:hover,.cp-close:hover{background:var(--bg)}
 .cp-title{font-size:16px;font-weight:600}
-.cp-list{flex:1;overflow-y:auto;padding:16px}
+.cp-list{flex:1;overflow-y:auto;padding:16px;max-height:66vh;overflow-y:auto}
 .cp-item{display:flex;gap:12px;margin-bottom:16px}
 .cp-avatar{
   width:32px;height:32px;border-radius:50%;background:#f0f0f0;color:var(--text-light);
@@ -2771,7 +3485,7 @@ body{
 /* ============ DARK MODE ============ */
 .dark-mode{
   --bg:#0a0a0a;--bg-card:#1a1a1a;--text:#e8e8e8;--text-light:#aaa;
-  --accent:#ccc;--accent-light:#222;--accent-soft:#2a2a2a;
+  --accent:#ccc;--accent-rgb:204,204,204;--accent-light:#222;--accent-soft:#2a2a2a;
   --accent-deep:#eee;--gradient-soft:linear-gradient(135deg, #111 0%, #1a1a1a 50%, #151515 100%);
   --gradient-accent:linear-gradient(135deg, #555, #999);
   --border:#2a2a2a;--border-light:#222;
@@ -2873,6 +3587,8 @@ body{
 .sv-progress::after{content:'';display:block;width:100%;height:100%;background:#fff;animation:storyProgress 4s linear forwards}
 @keyframes storyProgress{from{width:0}to{width:100%}}
 .sv-content{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px}
+.sv-content.sv-has-image{padding:0}
+.sv-img{width:100%;height:100%;object-fit:contain;max-height:80vh}
 .sv-emoji{font-size:72px;margin-bottom:20px}
 .sv-text{font-size:16px;text-align:center;line-height:1.8;white-space:pre-line;opacity:0.85}
 .sv-user{padding:14px;text-align:center}
