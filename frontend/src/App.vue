@@ -178,6 +178,12 @@
       <div v-if="imageViewer.show" class="image-viewer-overlay" @click="closeImageViewer">
         <button class="iv-close" @click.stop="closeImageViewer">×</button>
         <div class="iv-counter" v-if="imageViewer.images.length > 1">{{ imageViewer.current + 1 }} / {{ imageViewer.images.length }}</div>
+        <button v-if="imageViewer.current > 0" class="carousel-arrow carousel-arrow-left iv-arrow" @click.stop="imageViewer.current--">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <button v-if="imageViewer.current < imageViewer.images.length - 1" class="carousel-arrow carousel-arrow-right iv-arrow" @click.stop="imageViewer.current++">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
         <div class="iv-track"
           @click.stop
           @touchstart="viewerSwipeStart" @touchmove="viewerSwipeMove" @touchend="viewerSwipeEnd"
@@ -185,7 +191,7 @@
           <img v-for="(src, i) in imageViewer.images" :key="i" :src="src" class="iv-img" draggable="false" />
         </div>
         <div class="iv-dots" v-if="imageViewer.images.length > 1">
-          <span v-for="(_, i) in imageViewer.images" :key="i" :class="{ active: i === imageViewer.current }"></span>
+          <span v-for="(_, i) in imageViewer.images" :key="i" :class="{ active: i === imageViewer.current }" @click.stop="imageViewer.current = i"></span>
         </div>
       </div>
     </transition>
@@ -346,11 +352,27 @@
 
             <!-- Post Image (double tap to like) -->
             <div class="post-image-wrap" @dblclick="doubleTapLike(photo, $event)" :class="{ 'multi-image': (photo.extra_images || []).length }">
-              <img :src="getPhotoUrl(photo.filename)" :alt="photo.caption" loading="lazy" />
-              <!-- Multi-image indicator -->
-              <div v-if="(photo.extra_images || []).length" class="multi-image-badge">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7v10M16 7v10M7 12h10"/></svg>
-              </div>
+              <template v-if="(photo.extra_images || []).length">
+                <div class="feed-carousel-wrap"
+                  @touchstart="feedSwipeStart($event, photo)" @touchmove="feedSwipeMove($event, photo)" @touchend="feedSwipeEnd(photo)">
+                  <button v-if="getFeedIdx(photo) > 0" class="feed-carousel-arrow feed-carousel-arrow-left" @click.stop="feedPrev(photo)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                  </button>
+                  <button v-if="getFeedIdx(photo) < (photo.extra_images || []).length" class="feed-carousel-arrow feed-carousel-arrow-right" @click.stop="feedNext(photo)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>
+                  <div class="feed-carousel" :style="{ transform: `translateX(calc(-${getFeedIdx(photo) * 100}% + ${feedSwipe.currentId === photo.id ? feedSwipe.diffX : 0}px))` }">
+                    <img :src="getPhotoUrl(photo.filename)" :alt="photo.caption" loading="lazy" draggable="false" />
+                    <img v-for="(ef, i) in photo.extra_images" :key="i" :src="getPhotoUrl(ef)" loading="lazy" draggable="false" />
+                  </div>
+                  <div class="feed-carousel-dots">
+                    <span v-for="(_, i) in [photo.filename, ...(photo.extra_images || [])]" :key="i" :class="{ active: i === getFeedIdx(photo) }"></span>
+                  </div>
+                </div>
+              </template>
+              <template v-else>
+                <img :src="getPhotoUrl(photo.filename)" :alt="photo.caption" loading="lazy" />
+              </template>
               <!-- Double-tap star animation -->
               <transition name="heart-pop">
                 <div v-if="tapHeart === photo.id" class="double-tap-heart">✨</div>
@@ -554,6 +576,12 @@
             <div class="ppm-img-wrap"
               v-if="(profilePhotoModal.extra_images || []).length"
               @touchstart="viewerSwipeStart" @touchmove="viewerSwipeMove" @touchend="viewerSwipeEnd">
+              <button v-if="imageViewer.current > 0" class="carousel-arrow carousel-arrow-left" @click.stop="imageViewer.current--">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <button v-if="imageViewer.current < (profilePhotoModal.extra_images || []).length" class="carousel-arrow carousel-arrow-right" @click.stop="imageViewer.current++">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
               <div class="ppm-carousel" :style="{ transform: `translateX(calc(-${imageViewer.current * 100}% + ${imageViewer.diffX}px))` }">
                 <img :src="getPhotoUrl(profilePhotoModal.filename)" class="ppm-img" draggable="false" />
                 <img v-for="(ef, i) in (profilePhotoModal.extra_images || [])" :key="i" :src="getPhotoUrl(ef)" class="ppm-img" draggable="false" />
@@ -613,11 +641,28 @@
                 <svg class="bookmark-icon filled" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
               </button>
             </div>
-            <div class="post-image-wrap" @click="openPhotoDetail(photo)" :class="{ 'multi-image': (photo.extra_images || []).length }">
-              <img :src="getPhotoUrl(photo.filename)" :alt="photo.caption" loading="lazy" />
-              <div v-if="(photo.extra_images || []).length" class="multi-image-badge">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7v10M16 7v10M7 12h10"/></svg>
-              </div>
+            <div class="post-image-wrap" :class="{ 'multi-image': (photo.extra_images || []).length }">
+              <template v-if="(photo.extra_images || []).length">
+                <div class="feed-carousel-wrap"
+                  @touchstart="feedSwipeStart($event, photo)" @touchmove="feedSwipeMove($event, photo)" @touchend="feedSwipeEnd(photo)">
+                  <button v-if="getFeedIdx(photo) > 0" class="feed-carousel-arrow feed-carousel-arrow-left" @click.stop="feedPrev(photo)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                  </button>
+                  <button v-if="getFeedIdx(photo) < (photo.extra_images || []).length" class="feed-carousel-arrow feed-carousel-arrow-right" @click.stop="feedNext(photo)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>
+                  <div class="feed-carousel" :style="{ transform: `translateX(calc(-${getFeedIdx(photo) * 100}% + ${feedSwipe.currentId === photo.id ? feedSwipe.diffX : 0}px))` }">
+                    <img :src="getPhotoUrl(photo.filename)" :alt="photo.caption" loading="lazy" draggable="false" />
+                    <img v-for="(ef, i) in photo.extra_images" :key="i" :src="getPhotoUrl(ef)" loading="lazy" draggable="false" />
+                  </div>
+                  <div class="feed-carousel-dots">
+                    <span v-for="(_, i) in [photo.filename, ...(photo.extra_images || [])]" :key="i" :class="{ active: i === getFeedIdx(photo) }"></span>
+                  </div>
+                </div>
+              </template>
+              <template v-else>
+                <img :src="getPhotoUrl(photo.filename)" :alt="photo.caption" loading="lazy" />
+              </template>
             </div>
             <div class="post-actions">
               <div class="post-actions-left">
@@ -1136,6 +1181,43 @@ let mainEl = null
 
 // Image viewer carousel
 const imageViewer = reactive({ show: false, images: [], current: 0, startX: 0, diffX: 0, dragging: false })
+
+// Feed inline carousel
+const feedSwipe = reactive({ currentId: null, startX: 0, diffX: 0, dragging: false, currentIndex: {} })
+function getFeedIdx(photo) { return feedSwipe.currentIndex[photo.id] || 0 }
+function feedPrev(photo) {
+  const idx = getFeedIdx(photo)
+  if (idx > 0) feedSwipe.currentIndex[photo.id] = idx - 1
+}
+function feedNext(photo) {
+  const idx = getFeedIdx(photo)
+  const total = 1 + (photo.extra_images || []).length
+  if (idx < total - 1) feedSwipe.currentIndex[photo.id] = idx + 1
+}
+function feedSwipeStart(e, photo) {
+  feedSwipe.currentId = photo.id
+  feedSwipe.startX = e.touches[0].clientX
+  feedSwipe.dragging = true
+}
+function feedSwipeMove(e, photo) {
+  if (!feedSwipe.dragging || feedSwipe.currentId !== photo.id) return
+  feedSwipe.diffX = e.touches[0].clientX - feedSwipe.startX
+}
+function feedSwipeEnd(photo) {
+  feedSwipe.dragging = false
+  if (feedSwipe.currentId !== photo.id) return
+  const total = 1 + (photo.extra_images || []).length
+  const idx = getFeedIdx(photo)
+  if (Math.abs(feedSwipe.diffX) > 40) {
+    if (feedSwipe.diffX < 0 && idx < total - 1) {
+      feedSwipe.currentIndex[photo.id] = idx + 1
+    } else if (feedSwipe.diffX > 0 && idx > 0) {
+      feedSwipe.currentIndex[photo.id] = idx - 1
+    }
+  }
+  feedSwipe.diffX = 0
+  feedSwipe.currentId = null
+}
 
 function onHeaderSearchFocus() {
   headerSearchFocused.value = true
@@ -2543,6 +2625,11 @@ body{
 .ppm-close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,0.4);color:#fff;border:none;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10}
 .ppm-close:hover{background:rgba(0,0,0,0.6)}
 .ppm-img-wrap{position:relative;overflow:hidden;touch-action:pan-y}
+.ppm-img-wrap .carousel-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:3;width:36px;height:36px;border-radius:50%;border:none;background:rgba(0,0,0,0.35);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s;backdrop-filter:blur(4px)}
+.ppm-img-wrap .carousel-arrow:hover{background:rgba(0,0,0,0.6)}
+.ppm-img-wrap .carousel-arrow svg{width:20px;height:20px}
+.ppm-img-wrap .carousel-arrow-left{left:8px}
+.ppm-img-wrap .carousel-arrow-right{right:8px}
 .ppm-carousel{display:flex;transition:transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)}
 .ppm-img-wrap .ppm-img{min-width:100%;max-height:60vh;object-fit:contain;background:#000}
 .ppm-dots{display:flex;gap:6px;justify-content:center;padding:8px 0}
@@ -2653,6 +2740,17 @@ body{
 /* Post image */
 .post-image-wrap{position:relative;width:100%;aspect-ratio:1;overflow:hidden;background:#fafafa}
 .post-image-wrap img{width:100%;height:100%;object-fit:cover}
+.feed-carousel-wrap{position:relative;width:100%;height:100%;overflow:hidden;touch-action:pan-y}
+.feed-carousel{display:flex;height:100%;transition:transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)}
+.feed-carousel img{min-width:100%;height:100%;object-fit:cover}
+.feed-carousel-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:3;width:30px;height:30px;border-radius:50%;border:none;background:rgba(0,0,0,0.3);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s;backdrop-filter:blur(4px)}
+.feed-carousel-arrow:hover{background:rgba(0,0,0,0.55)}
+.feed-carousel-arrow svg{width:16px;height:16px}
+.feed-carousel-arrow-left{left:8px}
+.feed-carousel-arrow-right{right:8px}
+.feed-carousel-dots{display:flex;gap:5px;justify-content:center;position:absolute;bottom:8px;left:50%;transform:translateX(-50%);z-index:2}
+.feed-carousel-dots span{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.4);transition:all 0.2s}
+.feed-carousel-dots span.active{background:#fff;width:16px;border-radius:3px}
 
 /* Double tap animation */
 .double-tap-heart{
@@ -2864,8 +2962,13 @@ body{
 .iv-track{display:flex;width:100%;height:100%;transition:transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94);touch-action:pan-y}
 .iv-img{min-width:100%;height:100%;object-fit:contain;user-select:none;-webkit-user-drag:none}
 .iv-dots{display:flex;gap:6px;justify-content:center;position:absolute;bottom:24px;z-index:2}
-.iv-dots span{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.3);transition:all 0.2s}
+.iv-dots span{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.3);transition:all 0.2s;cursor:pointer}
 .iv-dots span.active{background:#fff;width:18px;border-radius:3px}
+.iv-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:3;width:44px;height:44px;border-radius:50%;border:none;background:rgba(0,0,0,0.35);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s;backdrop-filter:blur(4px)}
+.iv-arrow:hover{background:rgba(0,0,0,0.6)}
+.iv-arrow svg{width:24px;height:24px}
+.iv-arrow-left{left:12px}
+.iv-arrow-right{right:12px}
 
 /* ============ DARK MODE ============ */
 .dark-mode{
