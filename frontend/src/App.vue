@@ -63,10 +63,10 @@
 
     <!-- Search Panel -->
     <transition name="fade">
-      <div v-if="showSearchPanel" class="search-overlay" @click.self="showSearchPanel = false; searchQuery = ''; searchResults = []; searchPhotoResults = []; searchMsgResults = []; viewingUser = null; userFollowStatus = { is_following: false, following_count: 0, followers_count: 0, posts_count: 0 }; headerSearchVal = ''">
+      <div v-if="showSearchPanel" class="search-overlay" @click.self="showSearchPanel = false; searchQuery = ''; searchResults = []; searchPhotoResults = []; viewingUser = null; userFollowStatus = { is_following: false, following_count: 0, followers_count: 0, posts_count: 0 }; headerSearchVal = ''">
         <div class="search-panel">
           <div class="search-panel-header">
-            <button class="sp-close" @click="showSearchPanel = false; searchQuery = ''; searchResults = []; searchPhotoResults = []; searchMsgResults = []; viewingUser = null; userFollowStatus = { is_following: false, following_count: 0, followers_count: 0, posts_count: 0 }; headerSearchVal = ''">×</button>
+            <button class="sp-close" @click="showSearchPanel = false; searchQuery = ''; searchResults = []; searchPhotoResults = []; viewingUser = null; userFollowStatus = { is_following: false, following_count: 0, followers_count: 0, posts_count: 0 }; headerSearchVal = ''">×</button>
             <div class="sp-input-wrap">
               <input v-model="searchQuery" type="text" :placeholder="t('searchAll')" class="sp-input" @input="onUserSearch" ref="searchInput" />
             </div>
@@ -75,7 +75,7 @@
           <div v-if="searchQuery.trim() && !viewingUser" class="sp-tabs">
             <button :class="['sp-tab', { active: searchTab === 'users' }]" @click="searchTab = 'users'">{{ t('users') }}<span v-if="searchResults.length" class="sp-tab-count">{{ searchResults.length }}</span></button>
             <button :class="['sp-tab', { active: searchTab === 'posts' }]" @click="searchTab = 'posts'">{{ t('gallery') }}<span v-if="searchPhotoResults.length" class="sp-tab-count">{{ searchPhotoResults.length }}</span></button>
-            <button :class="['sp-tab', { active: searchTab === 'messages' }]" @click="searchTab = 'messages'">{{ t('messages') }}<span v-if="searchMsgResults.length" class="sp-tab-count">{{ searchMsgResults.length }}</span></button>
+
           </div>
           <!-- User results -->
           <div v-if="searchTab === 'users' && searchResults.length && !viewingUser" class="sp-results">
@@ -100,19 +100,7 @@
               </div>
             </div>
           </div>
-          <!-- Message results -->
-          <div v-if="searchTab === 'messages' && searchMsgResults.length && !viewingUser" class="sp-results">
-            <div v-for="msg in searchMsgResults" :key="msg.id" class="sp-msg-item" @click="showSearchPanel = false; navigateTo('messages')">
-              <div class="sp-msg-avatar" :class="{ 'no-avatar-text': msg.author_avatar }">
-                <img v-if="msg.author_avatar" :src="UPLOAD_BASE + msg.author_avatar" class="avatar-img" />
-                <span v-else>{{ (msg.nickname || '?').charAt(0) }}</span>
-              </div>
-              <div class="sp-msg-info">
-                <span class="sp-msg-name">{{ msg.nickname || t('anonymous') }}</span>
-                <p class="sp-msg-content">{{ msg.content }}</p>
-              </div>
-            </div>
-          </div>
+
           <!-- Viewing user profile -->
           <div class="sp-user-profile" v-if="viewingUser">
             <div class="sp-up-header" @click="viewingUser = null">
@@ -156,7 +144,7 @@
             <div v-else class="sp-up-empty">{{ t('noPhotos') }}</div>
           </div>
           <!-- Empty state -->
-          <div class="sp-empty" v-if="searchQuery.trim() && !searchResults.length && !searchPhotoResults.length && !searchMsgResults.length && !viewingUser && !searchLoading">
+          <div class="sp-empty" v-if="searchQuery.trim() && !searchResults.length && !searchPhotoResults.length && !viewingUser && !searchLoading">
             <p>{{ t('noSearchResult') }}</p>
           </div>
         </div>
@@ -534,7 +522,7 @@
           <!-- Tabs -->
           <div class="profile-tabs">
             <button :class="['ptab', { active: profileTab === 'photos' }]" @click="profileTab = 'photos'">{{ t('gallery') }}</button>
-            <button :class="['ptab', { active: profileTab === 'messages' }]" @click="profileTab = 'messages'">{{ t('messages') }}</button>
+
           </div>
 
           <!-- My Photos -->
@@ -547,26 +535,7 @@
             <div v-else class="profile-empty">{{ t('noPhotos') }}</div>
           </template>
 
-          <!-- My Messages -->
-          <template v-if="profileTab === 'messages'">
-            <div class="msg-list" v-if="myMessages.length">
-              <div v-for="msg in myMessages" :key="msg.id" class="msg-card">
-                <div class="msg-avatar" :class="{ 'no-avatar-text': currentUser?.avatar }">
-                  <img v-if="currentUser?.avatar" :src="UPLOAD_BASE + currentUser.avatar" class="avatar-img" />
-                  <span v-else>{{ msg.nickname?.charAt(0) || '?' }}</span>
-                </div>
-                <div class="msg-body">
-                  <div class="msg-meta">
-                    <span class="msg-name">{{ msg.nickname }}</span>
-                    <span v-if="msg.is_private" class="msg-private-badge">🔒</span>
-                    <span class="msg-time">{{ msg.created_at }}</span>
-                  </div>
-                  <p>{{ msg.content }}</p>
-                </div>
-              </div>
-            </div>
-            <div v-else class="profile-empty">{{ t('noMessages') }}</div>
-          </template>
+
         </div>
       </section>
 
@@ -695,73 +664,7 @@
         </div>
       </section>
 
-      <!-- ===== MESSAGES / GUESTBOOK ===== -->
-      <section v-if="activeSection === 'messages'" class="section">
-        <div class="section-head">
-          <h2 class="section-title">{{ t('guestbook') }}</h2>
-          <div class="section-head-actions">
-            <span class="msg-badge">{{ messages.length }}</span>
-          </div>
-        </div>
 
-        <div class="msg-form">
-          <div class="form-row">
-            <input v-if="!currentUser" v-model="msgNickname" type="text" :placeholder="t('yourName')" class="form-input" />
-            <div v-else class="form-input" style="background:var(--accent-light);border-color:var(--accent-soft);display:flex;align-items:center;padding-left:12px;gap:6px">
-              <span style="font-size:14px">👤</span>
-              <span style="font-size:13px;color:var(--text)">{{ currentUser.nickname || currentUser.username }}</span>
-            </div>
-          </div>
-          <textarea v-model="msgContent" :placeholder="t('writeMsg')" class="form-textarea" rows="3"></textarea>
-          <div class="form-row-bottom">
-            <label class="private-toggle" v-if="currentUser">
-              <input type="checkbox" v-model="msgIsPrivate" />
-              <span class="private-label">{{ msgIsPrivate ? '🔒' : '🔓' }} {{ t('private') }}</span>
-            </label>
-            <div v-else></div>
-            <button class="submit-btn" @click="submitMessage" :disabled="!msgContent.trim()">{{ t('send') }}</button>
-          </div>
-        </div>
-
-        <div class="msg-list" v-if="messages.length">
-          <div v-for="msg in messages" :key="msg.id" class="msg-card" :class="{ 'msg-private': msg.is_private }">
-            <div class="msg-avatar" :class="{ 'no-avatar-text': msg.author_avatar }">
-              <img v-if="msg.author_avatar" :src="UPLOAD_BASE + msg.author_avatar" class="avatar-img" />
-              <span v-else>{{ msg.nickname.charAt(0) }}</span>
-            </div>
-            <div class="msg-body">
-              <div class="msg-meta">
-                <span class="msg-name">{{ msg.nickname }}</span>
-                <span v-if="isMsgOwner(msg)" class="msg-private-badge"><span class="icon-line icon-sm" v-html="msg.is_private ? icons.lock : icons.unlock"></span></span>
-                <span v-else-if="msg.is_private" class="msg-private-badge"><span class="icon-line icon-sm" v-html="icons.lock"></span></span>
-                <span class="msg-time">{{ formatTimeAgo(msg.created_at) }}</span>
-              <div v-if="isMsgOwner(msg)" class="msg-actions-menu">
-                <button class="msg-action-btn" @click="startEditMsg(msg)" :title="t('editMsg')"><span class="icon-line" v-html="icons.edit"></span></button>
-                <button class="msg-action-btn" @click="toggleMsgPrivate(msg)" :title="msg.is_private ? t('setPublic') : t('setPrivate')"><span class="icon-line" v-html="msg.is_private ? icons.lock : icons.unlock"></span></button>
-                <button class="msg-action-btn" @click="handleDeleteMsg(msg.id)" :title="t('deleteMsg')"><span class="icon-line icon-delete" v-html="icons.trash"></span></button>
-              </div>
-              </div>
-              <!-- Edit mode -->
-              <div v-if="editingMsgId === msg.id" class="msg-edit-wrap">
-                <textarea v-model="editingMsgContent" class="form-textarea" rows="2" style="margin-bottom:8px"></textarea>
-                <div class="msg-edit-actions">
-                  <button class="btn-cancel" @click="editingMsgId = null" style="font-size:12px;padding:6px 14px">{{ t('cancel') }}</button>
-                  <button class="btn-confirm" @click="confirmEditMsg(msg.id)" style="font-size:12px;padding:6px 14px">{{ t('save') }}</button>
-                </div>
-              </div>
-              <p v-else class="msg-text">{{ msg.content }}</p>
-              <button class="msg-like-btn" @click="toggleMsgLike(msg)">
-                <svg class="heart-icon-sm" :class="{ filled: msgLikedSet.has(msg.id) }" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
-                {{ msg.likes || 0 }}
-              </button>
-            </div>
-          </div>
-        </div>
-        <div v-else class="empty-state">
-          <span class="empty-icon">📝</span>
-          <p>{{ t('noMessages') }}</p>
-        </div>
-      </section>
 
       <!-- ===== SETTINGS ===== -->
       <section v-if="activeSection === 'settings'" class="section">
@@ -869,7 +772,7 @@ const languages = [
 
 const i18n = {
   ko: {
-    appTitle: 'onul.', home: '홈', gallery: '갤러리', messages: '방명록',
+    appTitle: 'onul.', home: '홈', gallery: '갤러리',
     profileBio: '소소한 일상 기록 ✦',
     photos: '게시물', msgCount: '개 글', likes: '좋아요',
     heroLine1: '기억하고 싶은 순간들을', heroLine2: '여기에 모아두려고 해',
@@ -878,12 +781,9 @@ const i18n = {
     cancel: '취소', uploading: '...', post: '게시',
     noPhotos: '아직 사진이 없어요\n첫 사진을 올려보세요!',
     noComments: '아직 댓글이 없어요',
-    searchUser: '사용자 검색...', noSearchResult: '검색 결과가 없어요', searchAll: '사용자, 게시물, 방명록 검색...', users: '사용자',
+    searchUser: '사용자 검색...', noSearchResult: '검색 결과가 없어요', searchAll: '사용자, 게시물 검색...', users: '사용자',
     follow: '팔로우', following: '팔로잉', followers: '팔로워', posts: '게시물', followDone: '팔로우 완료 ✨', unfollowDone: '팔로우 취소',
-    guestbook: '방명록', comments: '댓글',
-    yourName: '이름', writeMsg: '하고 싶은 말을 적어보세요...',
-    send: '보내기', addComment: '댓글 달기...',
-    noMessages: '아직 글이 없어요\n첫 글을 남겨보세요!',
+    comments: '댓글',
     footer: 'everyday',
     mood_love: '평온', mood_happy: '행복', mood_miss: '그리움', mood_shy: '수줍음', mood_star: '별',
     toastPhotoOk: '업로드 완료 📸', toastPhotoFail: '실패, 다시 시도',
@@ -915,7 +815,7 @@ const i18n = {
     bookmarks: '저장', bookmarked: '저장됨!', unbookmarked: '저장 취소', noBookmarks: '저장한 게시물이 없어요\n관심 있는 글을 저장해보세요!', feedAll: '전체', feedFollowing: '팔로잉', bookmarkCount: (n) => `저장 ${n}개`, refreshHint: '당겨서 새로고침', loadingMore: '불러오는 중...', noMorePhotos: '더 이상 게시물이 없어요', noFollowingPhotos: '팔로우하는 사용자의\n게시물이 아직 없어요', addMorePhotos: '사진 더 추가', maxPhotosReached: '최대 10장까지', photoCount: (n) => `${n}/10`,
   },
   en: {
-    appTitle: 'onul.', home: 'Home', gallery: 'Feed', messages: 'Board',
+    appTitle: 'onul.', home: 'Home', gallery: 'Feed',
     profileBio: 'little moments ✦',
     photos: 'Posts', msgCount: 'msgs', likes: 'Likes',
     heroLine1: 'Moments I want to remember', heroLine2: 'collected here',
@@ -924,12 +824,9 @@ const i18n = {
     cancel: 'Cancel', uploading: '...', post: 'Post',
     noPhotos: 'No photos yet\nUpload the first one!',
     noComments: 'No comments yet',
-    searchUser: 'Search users...', noSearchResult: 'No results found', searchAll: 'Search users, posts, messages...', users: 'Users',
+    searchUser: 'Search users...', noSearchResult: 'No results found', searchAll: 'Search users, posts...', users: 'Users',
     follow: 'Follow', following: 'Following', followers: 'Followers', posts: 'Posts', followDone: 'Followed ✨', unfollowDone: 'Unfollowed',
-    guestbook: 'Guestbook', comments: 'Comments',
-    yourName: 'Name', writeMsg: 'Write something...',
-    send: 'Send', addComment: 'Add a comment...',
-    noMessages: 'No messages yet\nLeave the first one!',
+    comments: 'Comments',
     footer: 'everyday',
     mood_love: 'Calm', mood_happy: 'Happy', mood_miss: 'Miss', mood_shy: 'Shy', mood_star: 'Star',
     toastPhotoOk: 'Uploaded 📸', toastPhotoFail: 'Failed, retry',
@@ -961,7 +858,7 @@ const i18n = {
     bookmarks: 'Saved', bookmarked: 'Saved!', unbookmarked: 'Removed', noBookmarks: 'No saved posts yet\nSave posts you love!', feedAll: 'All', feedFollowing: 'Following', bookmarkCount: (n) => `${n} saved`, refreshHint: 'Pull down to refresh', loadingMore: 'Loading...', noMorePhotos: 'No more posts', noFollowingPhotos: 'No posts from people\nyou follow yet', addMorePhotos: 'Add more photos', maxPhotosReached: 'Max 10 photos', photoCount: (n) => `${n}/10`,
   },
   ja: {
-    appTitle: 'onul.', home: 'ホーム', gallery: 'フィード', messages: '掲示板',
+    appTitle: 'onul.', home: 'ホーム', gallery: 'フィード',
     profileBio: 'ささやかな日々の記録 ✦',
     photos: '投稿', msgCount: '件', likes: 'いいね',
     heroLine1: '覚えておきたい瞬間を', heroLine2: 'ここに集めるね',
@@ -970,12 +867,9 @@ const i18n = {
     cancel: 'キャンセル', uploading: '...', post: '投稿',
     noPhotos: 'まだ写真がありません\n最初の写真を投稿しましょう！',
     noComments: 'まだコメントがありません',
-    searchUser: 'ユーザー検索...', noSearchResult: '検索結果がありません', searchAll: 'ユーザー、投稿、掲示板を検索...', users: 'ユーザー',
+    searchUser: 'ユーザー検索...', noSearchResult: '検索結果がありません', searchAll: 'ユーザー、投稿を検索...', users: 'ユーザー',
     follow: 'フォロー', following: 'フォロー中', followers: 'フォロワー', posts: '投稿', followDone: 'フォローしました ✨', unfollowDone: 'フォロー解除',
-    guestbook: '掲示板', comments: 'コメント',
-    yourName: '名前', writeMsg: '書きたいことを書いて...',
-    send: '送信', addComment: 'コメントする...',
-    noMessages: 'まだメッセージがありません\n最初のメッセージを残しましょう！',
+    comments: 'コメント',
     footer: 'everyday',
     mood_love: '穏やか', mood_happy: '嬉しい', mood_miss: '会いたい', mood_shy: '恥ずかしい', mood_star: '星',
     toastPhotoOk: '投稿完了 📸', toastPhotoFail: '失敗、もう一度',
@@ -1007,7 +901,7 @@ const i18n = {
     bookmarks: '保存済み', bookmarked: '保存しました!', unbookmarked: '保存解除', noBookmarks: '保存した投稿がありません\n気になる投稿を保存してみましょう!', feedAll: 'すべて', feedFollowing: 'フォロー中', bookmarkCount: (n) => `${n}件保存`, refreshHint: '下に引いて更新', loadingMore: '読み込み中...', noMorePhotos: 'これ以上投稿はありません', noFollowingPhotos: 'フォローしているユーザーの\n投稿がまだありません', addMorePhotos: '写真を追加', maxPhotosReached: '最大10枚まで', photoCount: (n) => `${n}/10`,
   },
   zh: {
-    appTitle: 'onul.', home: '首页', gallery: '动态', messages: '留言板',
+    appTitle: 'onul.', home: '首页', gallery: '动态',
     profileBio: '细碎日常记录 ✦',
     photos: '动态', msgCount: '条留言', likes: '获赞',
     heroLine1: '想把记住的瞬间', heroLine2: '都留在这里',
@@ -1016,12 +910,9 @@ const i18n = {
     cancel: '取消', uploading: '...', post: '发布',
     noPhotos: '还没有照片\n发第一条动态吧！',
     noComments: '还没有评论',
-    searchUser: '搜索用户...', noSearchResult: '没有找到结果', searchAll: '搜索用户、动态、留言...', users: '用户',
+    searchUser: '搜索用户...', noSearchResult: '没有找到结果', searchAll: '搜索用户、动态...', users: '用户',
     follow: '关注', following: '已关注', followers: '粉丝', posts: '作品', followDone: '关注成功 ✨', unfollowDone: '已取消关注',
-    guestbook: '留言板', comments: '评论',
-    yourName: '你的名字', writeMsg: '写下你想说的话...',
-    send: '发送', addComment: '添加评论...',
-    noMessages: '还没有留言\n留第一条吧！',
+    comments: '评论',
     footer: 'everyday',
     mood_love: '平静', mood_happy: '开心', mood_miss: '想念', mood_shy: '害羞', mood_star: '星星',
     toastPhotoOk: '发布成功 📸', toastPhotoFail: '失败，请重试',
@@ -1063,12 +954,10 @@ function t(key, params) {
 // ============ State ============
 const activeSection = ref('home')
 const photos = ref([])
-const messages = ref([])
 const stats = reactive({ photos: 0, messages: 0, total_likes: 0 })
 const myStats = reactive({ posts_count: 0, following_count: 0, followers_count: 0 })
 const tapHeart = ref(null)
 const photoLikedSet = reactive(new Set())
-const msgLikedSet = reactive(new Set())
 const userHash = ref(localStorage.getItem('love_user_hash') || 'user_' + Math.random().toString(36).slice(2, 10))
 
 // Auth
@@ -1095,15 +984,9 @@ const profilePhotoModal = ref(null)
 
 // Computed: my content
 const myPhotos = ref([])
-const myMessages = ref([])
 
 // Login requirement
 const pendingSection = ref(null)
-
-// Message edit/delete/private
-const editingMsgId = ref(null)
-const editingMsgContent = ref('')
-const msgIsPrivate = ref(false)
 
 // Photo edit/private
 const uploadIsPrivate = ref(false)
@@ -1127,11 +1010,6 @@ const commentText = ref('')
 const editingCommentId = ref(null)
 const editingCommentContent = ref('')
 
-// Messages
-const msgNickname = ref('')
-const msgContent = ref('')
-const msgMood = ref('love')
-
 // Easter eggs
 const showEggPage = ref(false)
 const eggClick = ref(0)
@@ -1150,7 +1028,6 @@ const searchQuery = ref('')
 const searchTab = ref('users')
 const searchResults = ref([])
 const searchPhotoResults = ref([])
-const searchMsgResults = ref([])
 const searchLoading = ref(false)
 const searchInput = ref(null)
 const viewingUser = ref(null)
@@ -1269,25 +1146,20 @@ let searchTimer = null
 async function doSearch(q) {
   searchLoading.value = true
   searchPhotoResults.value = []
-  searchMsgResults.value = []
   try {
     const token = api.getToken()
-    const [usersRes, photosRes, msgsRes] = await Promise.all([
+    const [usersRes, photosRes] = await Promise.all([
       api.searchUsers(q),
       api.searchPhotos(q, token),
-      api.searchMessages(q, token),
     ])
     if (usersRes.data.code === 200) searchResults.value = usersRes.data.data
     if (photosRes.data.code === 200) searchPhotoResults.value = photosRes.data.data
-    if (msgsRes.data.code === 200) searchMsgResults.value = msgsRes.data.data
     // Auto-switch to tab with results
     if (searchResults.value.length) searchTab.value = 'users'
     else if (searchPhotoResults.value.length) searchTab.value = 'posts'
-    else if (searchMsgResults.value.length) searchTab.value = 'messages'
   } catch (e) {
     searchResults.value = []
     searchPhotoResults.value = []
-    searchMsgResults.value = []
   } finally {
     searchLoading.value = false
   }
@@ -1297,7 +1169,6 @@ async function onUserSearch() {
   if (!searchQuery.value.trim()) {
     searchResults.value = []
     searchPhotoResults.value = []
-    searchMsgResults.value = []
     return
   }
   headerSearchVal.value = searchQuery.value
@@ -1378,7 +1249,7 @@ const stories = ref([
 const navItems = [
   { id: 'home', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>` },
   { id: 'gallery', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>` },
-  { id: 'messages', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/></svg>` },
+
   { id: 'profile', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>` },
   { id: 'bookmarks', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>` },
   { id: 'settings', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>` },
@@ -1585,58 +1456,6 @@ async function handleDeletePhoto(photoId) {
   })
 }
 
-function startEditMsg(msg) {
-  editingMsgId.value = msg.id
-  editingMsgContent.value = msg.content
-}
-
-async function confirmEditMsg(msgId) {
-  if (!editingMsgContent.value.trim()) return
-  const token = api.getToken()
-  if (!token) return
-  try {
-    const fd = new FormData()
-    fd.append('content', editingMsgContent.value)
-    fd.append('token', token)
-    const res = await api.updateMessage(msgId, fd)
-    if (res.data.code === 200) {
-      showToast(t('save'))
-      editingMsgId.value = null
-      fetchMessages()
-    }
-  } catch (e) {
-    showToast(t('authFail'), 'error')
-  }
-}
-
-async function toggleMsgPrivate(msg) {
-  const token = api.getToken()
-  if (!token) return
-  try {
-    const fd = new FormData()
-    fd.append('is_private', msg.is_private ? '0' : '1')
-    fd.append('token', token)
-    const res = await api.updateMessage(msg.id, fd)
-    if (res.data.code === 200) {
-      fetchMessages()
-    }
-  } catch (e) {}
-}
-
-async function handleDeleteMsg(msgId) {
-  await showConfirm(t('deleteConfirm'), async () => {
-    const token = api.getToken()
-    if (!token) return
-    try {
-      const res = await api.deleteMessage(msgId, token)
-      if (res.data.code === 200) {
-        fetchMessages()
-        fetchStats()
-      }
-    } catch (e) {}
-  })
-}
-
 // ============ Helpers ============
 function getPhotoUrl(filename) {
   return `${UPLOAD_BASE}${filename}`
@@ -1682,22 +1501,6 @@ async function togglePhotoLike(photo) {
         photoLikedSet.delete(photo.id)
       }
       photo.likes = res.data.likes
-    }
-  } catch (e) { console.error(e) }
-}
-
-// Toggle message like
-async function toggleMsgLike(msg) {
-  try {
-    const res = await api.likeMessage(msg.id, userHash.value)
-    if (res.data.code === 200) {
-      if (res.data.liked) {
-        msgLikedSet.add(msg.id)
-        msg.likes = (msg.likes || 0) + 1
-      } else {
-        msgLikedSet.delete(msg.id)
-        msg.likes = Math.max(0, (msg.likes || 0) - 1)
-      }
     }
   } catch (e) { console.error(e) }
 }
@@ -1961,30 +1764,6 @@ function getAvatarStyle(user) {
   return {}
 }
 
-// Submit message
-async function submitMessage() {
-  if (!msgContent.value.trim()) return
-  try {
-    const fd = new FormData()
-    const token = api.getToken()
-    if (token) fd.append('token', token)
-    fd.append('nickname', currentUser.value ? (currentUser.value.nickname || currentUser.value.username) : (msgNickname.value || t('anonymous')))
-    fd.append('content', msgContent.value)
-    fd.append('mood', msgMood.value)
-    if (currentUser.value && msgIsPrivate.value) fd.append('is_private', '1')
-    const res = await api.createMessage(fd)
-    if (res.data.code === 200) {
-      showToast(t('toastMsgOk'))
-      msgContent.value = ''
-      msgIsPrivate.value = false
-      fetchMessages()
-      fetchStats()
-    }
-  } catch (e) {
-    showToast(t('toastMsgFail'), 'error')
-  }
-}
-
 // Easter eggs — hidden triggers
 function checkLogoEgg() {
   if (logoClicks.value >= 7) {
@@ -2239,15 +2018,6 @@ watch(activeSection, (val) => {
   }
 })
 
-async function fetchMessages() {
-  try {
-    const token = api.getToken()
-    const res = await api.getMessages(token)
-    if (res.data.code === 200) messages.value = res.data.data
-  } catch (e) { console.error(e) }
-  fetchMyContent()
-}
-
 async function fetchMyStats() {
   if (!currentUser.value) return
   try {
@@ -2270,7 +2040,6 @@ async function fetchStats() {
 
 function fetchData() {
   fetchPhotos()
-  fetchMessages()
   fetchStats()
   fetchMyStats()
   fetchBookmarkCount()
@@ -2280,12 +2049,8 @@ async function fetchMyContent() {
   const token = api.getToken()
   if (!token) return
   try {
-    const [photoRes, msgRes] = await Promise.all([
-      api.getMyPhotos(token),
-      api.getMyMessages(token)
-    ])
+    const photoRes = await api.getMyPhotos(token)
     if (photoRes.data.code === 200) myPhotos.value = photoRes.data.data
-    if (msgRes.data.code === 200) myMessages.value = msgRes.data.data
   } catch (e) { console.error(e) }
 }
 
