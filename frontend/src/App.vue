@@ -20,7 +20,7 @@
           </div>
           <!-- Login button -->
           <button v-if="!currentUser" class="login-trigger" @click="activeSection = 'login'">
-            <span class="login-icon">👤</span>
+            <span class="login-icon" v-html="icons.profile"></span>
           </button>
           <!-- User menu -->
           <div v-else class="user-menu">
@@ -119,7 +119,7 @@
               <button v-if="currentUser && currentUser.id !== viewingUser.id" class="sp-up-follow" :class="{ following: userFollowStatus.is_following }" @click.stop="toggleFollow">
                 {{ userFollowStatus.is_following ? t('following') : t('follow') }}
               </button>
-              <button v-if="currentUser && currentUser.id !== viewingUser.id" class="sp-up-dm" @click.stop="openDmModal(viewingUser)">✉️</button>
+              <button v-if="currentUser && currentUser.id !== viewingUser.id" class="sp-up-dm" @click.stop="openDmModal(viewingUser)"><span class="icon-line" v-html="icons.comment"></span></button>
             </div>
             <div class="sp-up-stats">
               <div class="sp-up-stat" @click.stop="openFollowList('posts')">
@@ -204,7 +204,7 @@
           <div class="dm-content">
             <div v-if="dmModal.loading" class="dm-loading">{{ t('loadingMore') }}</div>
             <div v-else-if="!dmModal.canSendUnlimited" class="dm-limit-hint">
-              <span v-if="dmModal.sentCount >= 3">⚠️ {{ t('dmLimit1') }}</span>
+              <span v-if="dmModal.sentCount >= 3"><span class="icon-line icon-sm" v-html="icons.warn"></span> {{ t('dmLimit1') }}</span>
               <span v-else>{{ t('dmLimit2', [dmModal.sentCount]) }}</span>
             </div>
             <div v-if="dmModal.messages.length" class="dm-list">
@@ -313,7 +313,7 @@
           <div class="story-item" v-for="s in stories" :key="s.id"
             :class="{ viewed: s.viewed }" @click="viewStory(s)">
             <div class="story-ring">
-              <div class="story-thumb">{{ s.icon }}</div>
+              <div class="story-thumb" v-html="s.icon"></div>
             </div>
             <span class="story-name">{{ s.name }}</span>
           </div>
@@ -321,7 +321,7 @@
 
         <!-- Featured Quote -->
         <div class="feature-card" @click="quoteEgg">
-          <div class="feature-icon">✨</div>
+          <div class="feature-icon" v-html="icons.sparkle"></div>
           <p class="feature-text">{{ t('heroLine1') }}</p>
           <p class="feature-text accent">{{ t('heroLine2') }}</p>
           <div class="feature-dots">
@@ -370,16 +370,16 @@
             <div class="upload-photo-count" v-if="uploadFiles.length">{{ t('photoCount', [uploadFiles.length]) }}</div>
             <input v-model="uploadCaption" type="text" :placeholder="t('writeCaption')" class="modal-input" />
             <div v-if="uploadLocation" class="upload-location">
-              <span>📍</span> {{ uploadLocation }}
+              <span class="icon-line icon-sm" v-html="icons.location"></span> {{ uploadLocation }}
             </div>
             <label v-if="currentUser" class="private-toggle" style="margin-bottom:14px">
               <input type="checkbox" v-model="uploadIsPrivate" />
-              <span class="private-label">{{ uploadIsPrivate ? '🔒' : '🔓' }} {{ t('private') }}</span>
+              <span class="private-label"><span class="icon-line icon-sm" v-html="uploadIsPrivate ? icons.lock : icons.unlock"></span> {{ t('private') }}</span>
             </label>
             <div class="modal-actions">
               <button class="btn-cancel" @click="showUploadModal = false">{{ t('cancel') }}</button>
               <button class="btn-confirm" @click="confirmUpload" :disabled="uploading || !uploadFiles.length">
-                {{ uploading ? '...' : '✨' }}
+                {{ uploading ? '...' : (t('post') || 'Post') }}
               </button>
             </div>
           </div>
@@ -451,7 +451,7 @@
               </template>
               <!-- Double-tap star animation -->
               <transition name="heart-pop">
-                <div v-if="tapHeart === photo.id" class="double-tap-heart">✨</div>
+                <div v-if="tapHeart === photo.id" class="double-tap-heart" v-html="icons.heart"></div>
               </transition>
             </div>
 
@@ -506,7 +506,7 @@
         </div>
 
         <div v-else class="empty-state">
-          <span class="empty-icon">🎞️</span>
+          <span class="empty-icon" v-html="icons.camera"></span>
           <p>{{ feedTab === 'following' ? t('noFollowingPhotos') : t('noPhotos') }}</p>
         </div>
 
@@ -536,8 +536,8 @@
                   <strong>{{ c.nickname }}</strong>
                   <span class="cp-time">{{ formatTimeAgo(c.created_at) }}</span>
                   <div v-if="isCommentOwner(c)" class="cp-actions">
-                    <button class="cp-action-btn" @click="startEditComment(c)" title="edit">✏️</button>
-                    <button class="cp-action-btn cp-delete" @click="handleDeleteComment(c.id)" title="delete">🗑️</button>
+                    <button class="cp-action-btn" @click="startEditComment(c)" title="edit"><span class="icon-line icon-sm" v-html="icons.edit"></span></button>
+                    <button class="cp-action-btn cp-delete" @click="handleDeleteComment(c.id)" title="delete"><span class="icon-line icon-sm icon-delete" v-html="icons.trash"></span></button>
                   </div>
                 </div>
                 <div v-if="editingCommentId === c.id" class="cp-edit-wrap">
@@ -569,7 +569,7 @@
             <div class="profile-avatar lg-avatar" @click="avatarInput?.click()">
               <img v-if="currentUser?.avatar" :src="UPLOAD_BASE + currentUser.avatar" class="avatar-img" />
               <span v-else style="color:#8e8e8e;font-size:22px;font-weight:300">onul</span>
-              <div class="avatar-edit-hint">✎</div>
+              <div class="avatar-edit-hint" v-html="icons.edit"></div>
             </div>
             <input ref="avatarInput" type="file" accept="image/*" style="display:none" @change="handleAvatarUpload">
             <div class="avatar-ring"></div>
@@ -599,7 +599,7 @@
             <div class="story-item" v-for="s in myStories" :key="s.id"
               :class="{ viewed: s.viewed }" @click="viewStory(s)">
               <div class="story-ring">
-                <div class="story-thumb">{{ s.icon }}</div>
+                <div class="story-thumb" v-html="s.icon"></div>
               </div>
               <span class="story-name">{{ s.name }}</span>
             </div>
@@ -678,7 +678,7 @@
               </div>
               <p class="ppm-caption">{{ profilePhotoModal.caption }}</p>
               <div class="ppm-stats">
-                <span>❤️ {{ profilePhotoModal.likes || 0 }}</span>
+                <span><span class="icon-line icon-sm" v-html="icons.heart"></span> {{ profilePhotoModal.likes || 0 }}</span>
                 <span><svg style="width:14px;height:14px;vertical-align:-2px" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z" stroke-linecap="round" stroke-linejoin="round"/></svg> {{ profilePhotoModal.comments_count || 0 }}</span>
                 <span>{{ profilePhotoModal.created_at }}</span>
               </div>
@@ -722,11 +722,11 @@
               @mousedown="onDmItemMouseDown($event, conv.user.id)">
               <div class="dm-conv-actions">
                 <button class="dm-action-btn pin-btn" @click.stop="pinDmConv(conv.user.id)">
-                  <span class="btn-icon">{{ conv.isPinned ? '📌' : '📍' }}</span>
+                  <span class="btn-icon" v-html="conv.isPinned ? icons.unpin : icons.pin"></span>
                   {{ conv.isPinned ? t('unpin') : t('pin') }}
                 </button>
                 <button class="dm-action-btn delete-btn" @click.stop="deleteDmConv(conv.user.id)">
-                  <span class="btn-icon">🗑️</span>
+                  <span class="btn-icon" v-html="icons.trash"></span>
                   {{ t('deleteMsg') }}
                 </button>
               </div>
@@ -813,7 +813,7 @@
           </div>
         </div>
         <div v-else class="empty-state">
-          <span class="empty-icon">🔖</span>
+          <span class="empty-icon" v-html="icons.bookmark"></span>
           <p>{{ t('noBookmarks') }}</p>
         </div>
         <div id="scroll-sentinel" class="scroll-sentinel" v-if="activeSection === 'bookmarks'">
@@ -853,19 +853,19 @@
       <transition name="egg-fade">
         <section v-if="showEggPage" class="section egg-page">
           <div class="egg-content" @click="eggClick++">
-            <div class="egg-heart">✦</div>
+            <div class="egg-heart" v-html="icons.sparkle"></div>
             <h2 class="egg-title">{{ t('eggTitle') }}</h2>
             <p class="egg-text" v-html="t('eggText')"></p>
             <div class="egg-counter" v-if="eggClick > 5">
               <span>{{ eggClick }} {{ t('eggClicks') }}</span>
             </div>
             <div v-if="eggClick >= 20" class="egg-secret">
-              🎉 {{ t('eggSecret') }}
+              <span class="icon-line" v-html="icons.party"></span> {{ t('eggSecret') }}
             </div>
             <button class="egg-close" @click.stop="showEggPage = false">{{ t('back') }}</button>
           </div>
           <div class="egg-float-hearts">
-            <span v-for="i in 30" :key="i" class="egg-fh" :style="eggFloatStyle(i)">✦</span>
+            <span v-for="i in 30" :key="i" class="egg-fh" :style="eggFloatStyle(i)" v-html="icons.sparkle"></span>
           </div>
         </section>
       </transition>
@@ -880,7 +880,7 @@
         <div class="sv-content" :class="{ 'sv-has-image': viewingStory.image }">
           <img v-if="viewingStory.image" :src="viewingStory.image" class="sv-img" />
           <template v-else>
-            <div class="sv-emoji">{{ viewingStory.icon }}</div>
+            <div class="sv-emoji" v-html="viewingStory.icon"></div>
             <p class="sv-text">{{ viewingStory.content }}</p>
           </template>
         </div>
@@ -934,7 +934,7 @@ const languages = [
 const i18n = {
   ko: {
     appTitle: 'onul.', home: '홈', gallery: '갤러리', dm: '메시지', profile: '프로필', bookmarks: '저장', settings: '설정',
-    profileBio: '소소한 일상 기록 ✦',
+    profileBio: '소소한 일상 기록',
     photos: '게시물', msgCount: '개 글', likes: '좋아요',
     heroLine1: '기억하고 싶은 순간들을', heroLine2: '여기에 모아두려고 해',
     ourMoments: '기록', uploadPhoto: '올리기',
@@ -943,41 +943,41 @@ const i18n = {
     noPhotos: '아직 사진이 없어요\n첫 사진을 올려보세요!',
     noComments: '아직 댓글이 없어요',
     searchUser: '사용자 검색...', noSearchResult: '검색 결과가 없어요', searchAll: '사용자, 게시물 검색...', users: '사용자',
-    follow: '팔로우', following: '팔로잉', followers: '팔로워', posts: '게시물', followDone: '팔로우 완료 ✨', unfollowDone: '팔로우 취소', mutual: '맞팔', remove: '차단', followerRemoved: '팔로워 제거됨', add: '추가', messages: '메시지', noMessages: '아직 메시지가 없어요', storyPosted: '스토리 게시됨 ✨', pin: '고정', unpin: '고정 해제', dmLimit1: '단방향 팔로우 시 최대 3개 메시지', dmLimit2: (n) => `${n}/3개 전송됨 (맞팔 후 무제한)`, dmLimitReached: '도달', dmPlaceholder: '메시지 보내기...', dmSend: '보내기', dmSendFail: '실패', dmDeleteConfirm: '이 대화를 삭제할까요?',
+    follow: '팔로우', following: '팔로잉', followers: '팔로워', posts: '게시물', followDone: '팔로우 완료', unfollowDone: '팔로우 취소', mutual: '맞팔', remove: '차단', followerRemoved: '팔로워 제거됨', add: '추가', messages: '메시지', noMessages: '아직 메시지가 없어요', storyPosted: '스토리 게시됨', pin: '고정', unpin: '고정 해제', dmLimit1: '단방향 팔로우 시 최대 3개 메시지', dmLimit2: (n) => `${n}/3개 전송됨 (맞팔 후 무제한)`, dmLimitReached: '도달', dmPlaceholder: '메시지 보내기...', dmSend: '보내기', dmSendFail: '실패', dmDeleteConfirm: '이 대화를 삭제할까요?',
     comments: '댓글',
     footer: 'everyday',
     mood_love: '평온', mood_happy: '행복', mood_miss: '그리움', mood_shy: '수줍음', mood_star: '별',
-    toastPhotoOk: '업로드 완료 📸', toastPhotoFail: '실패, 다시 시도',
-    toastMsgOk: '등록 완료 ✉️', toastMsgFail: '실패, 다시 시도',
-    toastCommentOk: '댓글 완료 💬',
+    toastPhotoOk: '업로드 완료', toastPhotoFail: '실패, 다시 시도',
+    toastMsgOk: '등록 완료', toastMsgFail: '실패, 다시 시도',
+    toastCommentOk: '댓글 완료',
     anonymous: '익명',
     peopleLike: '명이 좋아합니다',
     viewAllComments: (n) => `댓글 ${n}개 모두 보기`,
     inMyHeart: '어딘가',
     ago: ' 전',
-    eggTitle: '✦',
-    eggText: '여기까지 와줘서 고마워<br>평범한 하루도<br>기록하면 특별해지니까<br><br>앞으로도 좋은 날들이<br>많았으면 좋겠어 ✨',
+    eggTitle: '·',
+    eggText: '여기까지 와줘서 고마워<br>평범한 하루도<br>기록하면 특별해지니까<br><br>앞으로도 좋은 날들이<br>많았으면 좋겠어',
     eggClicks: '번 클릭!',
-    eggSecret: '🤫 비밀 업적 달성',
+    eggSecret: '비밀 업적 달성',
     back: '닫기',
     login: '로그인', register: '회원가입', username: '아이디', password: '비밀번호', nickname: '별명',
     logout: '로그아웃', private: '나만 보기', setPrivate: '나만 보기', setPublic: '전체 공개',
     myPrivate: '나의 비밀글', save: '저장', editMsg: '수정', deleteMsg: '꺼내기',
     deleteConfirm: '이 기록을 걷어낼까요?',
-    loginOk: '환영해요 ✨', registerOk: '가입 완료 ✨', authFail: '다시 시도해주세요',
+    loginOk: '환영해요', registerOk: '가입 완료', authFail: '다시 시도해주세요',
     loginRequiredPopup: '로그인이 필요한 페이지입니다. 로그인 하시겠습니까?',
     ok: '확인',
-    profile: '프로필', settings: '설정', changeAvatar: '사진 변경', changePhoto: '이미지 변경', changeNickname: '별명 변경', phone: '전화번호', email: '이메일', changePwd: '비밀번호 변경', oldPwd: '현재 비밀번호', newPwd: '새 비밀번호', pwdChanged: '비밀번호 변경 완료 ✨', profileSaved: '저장 완료 ✨', loginFirst: '로그인 후 이용해주세요', settingsLang: '언어', darkMode: '다크 모드',
+    profile: '프로필', settings: '설정', changeAvatar: '사진 변경', changePhoto: '이미지 변경', changeNickname: '별명 변경', phone: '전화번호', email: '이메일', changePwd: '비밀번호 변경', oldPwd: '현재 비밀번호', newPwd: '새 비밀번호', pwdChanged: '비밀번호 변경 완료', profileSaved: '저장 완료', loginFirst: '로그인 후 이용해주세요', settingsLang: '언어', darkMode: '다크 모드',
     timeJustNow: '방금', timeMin: '분', timeHour: '시간', timeDay: '일',
-    story1: '어느 날 ☀️', story2: '기록 🌙', story3: '앞으로 🌸',
-    story1Content: '기분 좋은 하루였어\n바람이 좋았어 🌿',
-    story2Content: '소소한 순간들이\n자꾸 기억에 남아 📖',
-    story3Content: '앞으로의 이야기도\n기록하고 싶어 ✨',
+    story1: '어느 날', story2: '기록', story3: '앞으로',
+    story1Content: '기분 좋은 하루였어\n바람이 좋았어',
+    story2Content: '소소한 순간들이\n자꾸 기억에 남아',
+    story3Content: '앞으로의 이야기도\n기록하고 싶어',
     bookmarks: '저장', bookmarked: '저장됨!', unbookmarked: '저장 취소', noBookmarks: '저장한 게시물이 없어요\n관심 있는 글을 저장해보세요!', feedAll: '전체', feedFollowing: '팔로잉', bookmarkCount: (n) => `저장 ${n}개`, refreshHint: '당겨서 새로고침', loadingMore: '불러오는 중...', noMorePhotos: '더 이상 게시물이 없어요', noFollowingPhotos: '팔로우하는 사용자의\n게시물이 아직 없어요', addMorePhotos: '사진 더 추가', maxPhotosReached: '최대 10장까지', photoCount: (n) => `${n}/10`,
   },
   en: {
     appTitle: 'onul.', home: 'Home', gallery: 'Feed', dm: 'Messages', profile: 'Profile', bookmarks: 'Saved', settings: 'Settings',
-    profileBio: 'little moments ✦',
+    profileBio: 'little moments',
     photos: 'Posts', msgCount: 'msgs', likes: 'Likes',
     heroLine1: 'Moments I want to remember', heroLine2: 'collected here',
     ourMoments: 'Archive', uploadPhoto: 'Post',
@@ -986,41 +986,41 @@ const i18n = {
     noPhotos: 'No photos yet\nUpload the first one!',
     noComments: 'No comments yet',
     searchUser: 'Search users...', noSearchResult: 'No results found', searchAll: 'Search users, posts...', users: 'Users',
-    follow: 'Follow', following: 'Following', followers: 'Followers', posts: 'Posts', followDone: 'Followed ✨', unfollowDone: 'Unfollowed', mutual: 'Mutual', remove: 'Remove', followerRemoved: 'Follower removed', add: 'Add', messages: 'Messages', noMessages: 'No messages yet', storyPosted: 'Story posted ✨', pin: 'Pin', unpin: 'Unpin', dmLimit1: 'Max 3 messages for one-way follow', dmLimit2: (n) => `${n}/3 sent (unlimited after mutual)`, dmLimitReached: 'Limit reached', dmPlaceholder: 'Send message...', dmSend: 'Send', dmSendFail: 'Failed', dmDeleteConfirm: 'Delete this conversation?',
+    follow: 'Follow', following: 'Following', followers: 'Followers', posts: 'Posts', followDone: 'Followed', unfollowDone: 'Unfollowed', mutual: 'Mutual', remove: 'Remove', followerRemoved: 'Follower removed', add: 'Add', messages: 'Messages', noMessages: 'No messages yet', storyPosted: 'Story posted', pin: 'Pin', unpin: 'Unpin', dmLimit1: 'Max 3 messages for one-way follow', dmLimit2: (n) => `${n}/3 sent (unlimited after mutual)`, dmLimitReached: 'Limit reached', dmPlaceholder: 'Send message...', dmSend: 'Send', dmSendFail: 'Failed', dmDeleteConfirm: 'Delete this conversation?',
     comments: 'Comments',
     footer: 'everyday',
     mood_love: 'Calm', mood_happy: 'Happy', mood_miss: 'Miss', mood_shy: 'Shy', mood_star: 'Star',
-    toastPhotoOk: 'Uploaded 📸', toastPhotoFail: 'Failed, retry',
-    toastMsgOk: 'Posted ✉️', toastMsgFail: 'Failed, retry',
-    toastCommentOk: 'Commented 💬',
+    toastPhotoOk: 'Uploaded', toastPhotoFail: 'Failed, retry',
+    toastMsgOk: 'Posted', toastMsgFail: 'Failed, retry',
+    toastCommentOk: 'Commented',
     anonymous: 'Anonymous',
     peopleLike: 'likes',
     viewAllComments: (n) => `View all ${n} comments`,
     inMyHeart: 'somewhere',
     ago: ' ago',
-    eggTitle: '✦',
-    eggText: 'Thanks for finding this page<br>Even ordinary days<br>become special when documented<br><br>Wishing you many<br>good days ahead ✨',
+    eggTitle: '·',
+    eggText: 'Thanks for finding this page<br>Even ordinary days<br>become special when documented<br><br>Wishing you many<br>good days ahead',
     eggClicks: ' clicks!',
-    eggSecret: '🤫 Secret achievement unlocked',
+    eggSecret: 'Secret achievement unlocked',
     back: 'Close',
     login: 'Login', register: 'Sign Up', username: 'Username', password: 'Password', nickname: 'Nickname',
     logout: 'Logout', private: 'Private', setPrivate: 'Set Private', setPublic: 'Set Public',
     myPrivate: 'My Private Posts', save: 'Save', editMsg: 'Edit', deleteMsg: 'Remove',
     deleteConfirm: 'Should we take this memory down?',
-    loginOk: 'Welcome ✨', registerOk: 'Signed up ✨', authFail: 'Please try again',
+    loginOk: 'Welcome', registerOk: 'Signed up', authFail: 'Please try again',
     loginRequiredPopup: 'Login is required for this page. Would you like to login?',
     ok: 'OK',
-    profile: 'Profile', settings: 'Settings', changeAvatar: 'Change Photo', changePhoto: 'Change Image', changeNickname: 'Change Nickname', phone: 'Phone', email: 'Email', changePwd: 'Change Password', oldPwd: 'Current Password', newPwd: 'New Password', pwdChanged: 'Password changed ✨', profileSaved: 'Saved ✨', loginFirst: 'Please login first', settingsLang: 'Language', darkMode: 'Dark Mode',
+    profile: 'Profile', settings: 'Settings', changeAvatar: 'Change Photo', changePhoto: 'Change Image', changeNickname: 'Change Nickname', phone: 'Phone', email: 'Email', changePwd: 'Change Password', oldPwd: 'Current Password', newPwd: 'New Password', pwdChanged: 'Password changed', profileSaved: 'Saved', loginFirst: 'Please login first', settingsLang: 'Language', darkMode: 'Dark Mode',
     timeJustNow: 'now', timeMin: 'm', timeHour: 'h', timeDay: 'd',
-    story1: 'A Day ☀️', story2: 'Memories 🌙', story3: 'Ahead 🌸',
-    story1Content: 'A nice day\nthe breeze was gentle 🌿',
-    story2Content: 'Little moments\nstay in my memory 📖',
-    story3Content: 'The stories yet to come\nI want to document them too ✨',
+    story1: 'A Day', story2: 'Memories', story3: 'Ahead',
+    story1Content: 'A nice day\nthe breeze was gentle',
+    story2Content: 'Little moments\nstay in my memory',
+    story3Content: 'The stories yet to come\nI want to document them too',
     bookmarks: 'Saved', bookmarked: 'Saved!', unbookmarked: 'Removed', noBookmarks: 'No saved posts yet\nSave posts you love!', feedAll: 'All', feedFollowing: 'Following', bookmarkCount: (n) => `${n} saved`, refreshHint: 'Pull down to refresh', loadingMore: 'Loading...', noMorePhotos: 'No more posts', noFollowingPhotos: 'No posts from people\nyou follow yet', addMorePhotos: 'Add more photos', maxPhotosReached: 'Max 10 photos', photoCount: (n) => `${n}/10`,
   },
   ja: {
     appTitle: 'onul.', home: 'ホーム', gallery: 'フィード', dm: 'メッセージ', profile: 'プロフィール', bookmarks: '保存済み', settings: '設定',
-    profileBio: 'ささやかな日々の記録 ✦',
+    profileBio: 'ささやかな日々の記録',
     photos: '投稿', msgCount: '件', likes: 'いいね',
     heroLine1: '覚えておきたい瞬間を', heroLine2: 'ここに集めるね',
     ourMoments: '記録', uploadPhoto: '投稿',
@@ -1029,41 +1029,41 @@ const i18n = {
     noPhotos: 'まだ写真がありません\n最初の写真を投稿しましょう！',
     noComments: 'まだコメントがありません',
     searchUser: 'ユーザー検索...', noSearchResult: '検索結果がありません', searchAll: 'ユーザー、投稿を検索...', users: 'ユーザー',
-    follow: 'フォロー', following: 'フォロー中', followers: 'フォロワー', posts: '投稿', followDone: 'フォローしました ✨', unfollowDone: 'フォロー解除', mutual: '相互フォロー', remove: '削除', followerRemoved: 'フォロワーを削除しました', add: '追加', messages: 'メッセージ', noMessages: 'メッセージはまだありません', storyPosted: 'ストーリーを投稿しました ✨', pin: 'ピン留め', unpin: 'ピン解除', dmLimit1: '片思料は最大3通', dmLimit2: (n) => `${n}/3送信済み ( 맞팔後は無制限)`, dmLimitReached: '上限', dmPlaceholder: 'メッセージを入力...', dmSend: '送信', dmSendFail: '失敗', dmDeleteConfirm: 'この会話を削除しますか?',
+    follow: 'フォロー', following: 'フォロー中', followers: 'フォロワー', posts: '投稿', followDone: 'フォローしました', unfollowDone: 'フォロー解除', mutual: '相互フォロー', remove: '削除', followerRemoved: 'フォロワーを削除しました', add: '追加', messages: 'メッセージ', noMessages: 'メッセージはまだありません', storyPosted: 'ストーリーを投稿しました', pin: 'ピン留め', unpin: 'ピン解除', dmLimit1: '片思料は最大3通', dmLimit2: (n) => `${n}/3送信済み ( 맞팔後は無制限)`, dmLimitReached: '上限', dmPlaceholder: 'メッセージを入力...', dmSend: '送信', dmSendFail: '失敗', dmDeleteConfirm: 'この会話を削除しますか?',
     comments: 'コメント',
     footer: 'everyday',
     mood_love: '穏やか', mood_happy: '嬉しい', mood_miss: '会いたい', mood_shy: '恥ずかしい', mood_star: '星',
-    toastPhotoOk: '投稿完了 📸', toastPhotoFail: '失敗、もう一度',
-    toastMsgOk: '投稿完了 ✉️', toastMsgFail: '失敗、もう一度',
-    toastCommentOk: 'コメント完了 💬',
+    toastPhotoOk: '投稿完了', toastPhotoFail: '失敗、もう一度',
+    toastMsgOk: '投稿完了', toastMsgFail: '失敗、もう一度',
+    toastCommentOk: 'コメント完了',
     anonymous: '匿名',
     peopleLike: '人がいいねしました',
     viewAllComments: (n) => `コメント${n}件をすべて見る`,
     inMyHeart: 'どこか',
     ago: '前',
-    eggTitle: '✦',
-    eggText: 'ここまで来てくれてありがとう<br>平凡な日も<br>記録すれば特別になるから<br><br>これからも良い日が<br>たくさんありますように ✨',
+    eggTitle: '·',
+    eggText: 'ここまで来てくれてありがとう<br>平凡な日も<br>記録すれば特別になるから<br><br>これからも良い日が<br>たくさんありますように',
     eggClicks: '回クリック!',
-    eggSecret: '🤫 秘密の実績達成',
+    eggSecret: '秘密の実績達成',
     back: '閉じる',
     login: 'ログイン', register: '新規登録', username: 'ユーザー名', password: 'パスワード', nickname: 'ニックネーム',
     logout: 'ログアウト', private: '非公開', setPrivate: '非公開にする', setPublic: '公開にする',
     myPrivate: '秘密の投稿', save: '保存', editMsg: '編集', deleteMsg: 'しまう',
     deleteConfirm: 'この記憶をしまいますか？',
-    loginOk: 'ようこそ ✨', registerOk: '登録完了 ✨', authFail: 'もう一度お試しください',
+    loginOk: 'ようこそ', registerOk: '登録完了', authFail: 'もう一度お試しください',
     loginRequiredPopup: 'このページをご利用いただくにはログインが必要です。ログインしますか？',
     ok: 'はい',
-    profile: 'プロフィール', settings: '設定', changeAvatar: '写真変更', changePhoto: '画像変更', changeNickname: 'ニックネーム変更', phone: '電話番号', email: 'メール', changePwd: 'パスワード変更', oldPwd: '現在のパスワード', newPwd: '新しいパスワード', pwdChanged: 'パスワードを変更しました ✨', profileSaved: '保存しました ✨', loginFirst: 'ログインしてください', settingsLang: '言語', darkMode: 'ダークモード',
+    profile: 'プロフィール', settings: '設定', changeAvatar: '写真変更', changePhoto: '画像変更', changeNickname: 'ニックネーム変更', phone: '電話番号', email: 'メール', changePwd: 'パスワード変更', oldPwd: '現在のパスワード', newPwd: '新しいパスワード', pwdChanged: 'パスワードを変更しました', profileSaved: '保存しました', loginFirst: 'ログインしてください', settingsLang: '言語', darkMode: 'ダークモード',
     timeJustNow: 'たった今', timeMin: '分', timeHour: '時間', timeDay: '日',
-    story1: 'ある日 ☀️', story2: '記録 🌙', story3: 'これから 🌸',
-    story1Content: '気分のいい一日だった\n風が気持ちよかったよ 🌿',
-    story2Content: 'ささやかな瞬間が\nずっと記憶に残ってる 📖',
-    story3Content: 'これからの物語も\n記録していきたい ✨',
+    story1: 'ある日', story2: '記録', story3: 'これから',
+    story1Content: '気分のいい一日だった\n風が気持ちよかったよ',
+    story2Content: 'ささやかな瞬間が\nずっと記憶に残ってる',
+    story3Content: 'これからの物語も\n記録していきたい',
     bookmarks: '保存済み', bookmarked: '保存しました!', unbookmarked: '保存解除', noBookmarks: '保存した投稿がありません\n気になる投稿を保存してみましょう!', feedAll: 'すべて', feedFollowing: 'フォロー中', bookmarkCount: (n) => `${n}件保存`, refreshHint: '下に引いて更新', loadingMore: '読み込み中...', noMorePhotos: 'これ以上投稿はありません', noFollowingPhotos: 'フォローしているユーザーの\n投稿がまだありません', addMorePhotos: '写真を追加', maxPhotosReached: '最大10枚まで', photoCount: (n) => `${n}/10`,
   },
   zh: {
     appTitle: 'onul.', home: '首页', gallery: '动态', dm: '私信', profile: '主页', bookmarks: '收藏', settings: '设置',
-    profileBio: '细碎日常记录 ✦',
+    profileBio: '细碎日常记录',
     photos: '动态', msgCount: '条留言', likes: '获赞',
     heroLine1: '想把记住的瞬间', heroLine2: '都留在这里',
     ourMoments: '记录', uploadPhoto: '发布',
@@ -1072,36 +1072,36 @@ const i18n = {
     noPhotos: '还没有照片\n发第一条动态吧！',
     noComments: '还没有评论',
     searchUser: '搜索用户...', noSearchResult: '没有找到结果', searchAll: '搜索用户、动态...', users: '用户',
-    follow: '关注', following: '已关注', followers: '粉丝', posts: '作品', followDone: '关注成功 ✨', unfollowDone: '已取消关注', mutual: '互关', remove: '移除', followerRemoved: '已移除粉丝', add: '添加', messages: '私信', noMessages: '暂无私信', storyPosted: 'Story已发布 ✨', pin: '置顶', unpin: '取消置顶', dmLimit1: '单方关注最多3条消息', dmLimit2: (n) => `已发送 ${n}/3条 (互关后无限制)`, dmLimitReached: '已达上限', dmPlaceholder: '发送消息...', dmSend: '发送', dmSendFail: '发送失败', dmDeleteConfirm: '确定删除此对话吗？',
+    follow: '关注', following: '已关注', followers: '粉丝', posts: '作品', followDone: '关注成功', unfollowDone: '已取消关注', mutual: '互关', remove: '移除', followerRemoved: '已移除粉丝', add: '添加', messages: '私信', noMessages: '暂无私信', storyPosted: 'Story已发布', pin: '置顶', unpin: '取消置顶', dmLimit1: '单方关注最多3条消息', dmLimit2: (n) => `已发送 ${n}/3条 (互关后无限制)`, dmLimitReached: '已达上限', dmPlaceholder: '发送消息...', dmSend: '发送', dmSendFail: '发送失败', dmDeleteConfirm: '确定删除此对话吗？',
     comments: '评论',
     footer: 'everyday',
     mood_love: '平静', mood_happy: '开心', mood_miss: '想念', mood_shy: '害羞', mood_star: '星星',
-    toastPhotoOk: '发布成功 📸', toastPhotoFail: '失败，请重试',
-    toastMsgOk: '留言成功 ✉️', toastMsgFail: '失败，请重试',
-    toastCommentOk: '评论成功 💬',
+    toastPhotoOk: '发布成功', toastPhotoFail: '失败，请重试',
+    toastMsgOk: '留言成功', toastMsgFail: '失败，请重试',
+    toastCommentOk: '评论成功',
     anonymous: '匿名',
     peopleLike: '人觉得很赞',
     viewAllComments: (n) => `查看全部 ${n} 条评论`,
     inMyHeart: '某处',
     ago: '前',
-    eggTitle: '✦',
-    eggText: '谢谢你找到这个页面<br>平凡的日子<br>记录下来也会变得特别<br><br>希望你接下来的每一天<br>都顺顺利利的 ✨',
+    eggTitle: '·',
+    eggText: '谢谢你找到这个页面<br>平凡的日子<br>记录下来也会变得特别<br><br>希望你接下来的每一天<br>都顺顺利利的',
     eggClicks: '次点击！',
-    eggSecret: '🤫 秘密成就达成',
+    eggSecret: '秘密成就达成',
     back: '关闭',
     login: '登录', register: '注册', username: '账号', password: '密码', nickname: '昵称',
     logout: '退出登录', private: '私密', setPrivate: '设为私密', setPublic: '设为公开',
     myPrivate: '我的私密记录', save: '保存', editMsg: '编辑', deleteMsg: '收起',
     deleteConfirm: '要把这条记录收起来吗？',
-    loginOk: '欢迎 ✨', registerOk: '注册成功 ✨', authFail: '请重试',
+    loginOk: '欢迎', registerOk: '注册成功', authFail: '请重试',
     loginRequiredPopup: '该页面需要登录才能访问。是否立即登录？',
     ok: '确定',
-    profile: '个人主页', settings: '设置', changeAvatar: '更换头像', changePhoto: '更换图片', changeNickname: '修改昵称', phone: '手机号', email: '邮箱', changePwd: '修改密码', oldPwd: '当前密码', newPwd: '新密码', pwdChanged: '密码修改成功 ✨', profileSaved: '保存成功 ✨', loginFirst: '请先登录', settingsLang: '语言', darkMode: '深色模式',
+    profile: '个人主页', settings: '设置', changeAvatar: '更换头像', changePhoto: '更换图片', changeNickname: '修改昵称', phone: '手机号', email: '邮箱', changePwd: '修改密码', oldPwd: '当前密码', newPwd: '新密码', pwdChanged: '密码修改成功', profileSaved: '保存成功', loginFirst: '请先登录', settingsLang: '语言', darkMode: '深色模式',
     timeJustNow: '刚刚', timeMin: '分钟', timeHour: '小时', timeDay: '天',
-    story1: '某一天 ☀️', story2: '记录 🌙', story3: '以后 🌸',
-    story1Content: '心情不错的一天\n风很舒服 🌿',
-    story2Content: '细碎的瞬间\n总是留在记忆里 📖',
-    story3Content: '以后的故事\n也想继续记录 ✨',
+    story1: '某一天', story2: '记录', story3: '以后',
+    story1Content: '心情不错的一天\n风很舒服',
+    story2Content: '细碎的瞬间\n总是留在记忆里',
+    story3Content: '以后的故事\n也想继续记录',
     bookmarks: '收藏', bookmarked: '已收藏!', unbookmarked: '已取消', noBookmarks: '还没有收藏的动态\n收藏感兴趣的动态吧!', feedAll: '全部', feedFollowing: '关注', bookmarkCount: (n) => `收藏 ${n}条`, refreshHint: '下拉刷新', loadingMore: '加载中...', noMorePhotos: '没有更多动态了', noFollowingPhotos: '还没有关注用户的\n动态发布', addMorePhotos: '添加更多照片', maxPhotosReached: '最多10张', photoCount: (n) => `${n}/10`,
   },
 }
@@ -1593,7 +1593,7 @@ const toast = reactive({ show: false, message: '', type: 'success' })
 // Confirm dialog
 const confirmDialog = reactive({ show: false, message: '', icon: '', onConfirm: () => {}, onCancel: () => {} })
 
-function showConfirm(message, onConfirm, icon = '🗑️') {
+function showConfirm(message, onConfirm, icon = icons.trash) {
   return new Promise((resolve) => {
     confirmDialog.show = true
     confirmDialog.message = message
@@ -1615,9 +1615,9 @@ let quoteInterval = null
 
 // Stories
 const stories = ref([
-  { id: 1, icon: '☀️', name: 'story', content: '', viewed: false },
-  { id: 2, icon: '🌙', name: 'story', content: '', viewed: false },
-  { id: 3, icon: '🌸', name: 'story', content: '', viewed: false },
+  { id: 1, icon: icons.sun, name: 'story', content: '', viewed: false },
+  { id: 2, icon: icons.moon, name: 'story', content: '', viewed: false },
+  { id: 3, icon: icons.flower, name: 'story', content: '', viewed: false },
 ])
 const myStories = ref([])
 
@@ -1664,7 +1664,7 @@ async function loadMyStories() {
       if (myData) {
         myStories.value = myData.stories.map(s => ({
           id: s.id,
-          icon: '📷',
+          icon: icons.camera,
           name: 'My Story',
           content: s.caption,
           filename: s.filename,
@@ -1691,15 +1691,36 @@ const icons = {
   unlock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg>`,
   trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`,
   warn: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+  pin: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6m0 0a4 4 0 014 4v2h-8v-2a4 4 0 014-4z"/><path d="M8 14v6l4-2 4 2v-6"/></svg>`,
+  unpin: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6m0 0a4 4 0 014 4v2h-8v-2a4 4 0 014-4z"/><path d="M8 14l-2 4m4-2l-2 2m4 0l2 2m-2-2l2 4"/></svg>`,
+  location: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>`,
+  sparkle: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"/></svg>`,
+  camera: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>`,
+  comment: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/></svg>`,
+  heart: `<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>`,
+  sun: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`,
+  moon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>`,
+  flower: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="3"/><path d="M12 2a3 3 0 00-3 3c0 1.3.84 2.4 2 2.82"/><path d="M12 2a3 3 0 013 3c0 1.3-.84 2.4-2 2.82"/><path d="M5.08 7.02a3 3 0 00.67 4.18c1.1.72 2.56.55 3.48-.35"/><path d="M18.92 7.02a3 3 0 01-.67 4.18c-1.1.72-2.56.55-3.48-.35"/><path d="M8 13a3 3 0 003 3c1.3 0 2.4-.84 2.82-2"/><path d="M16 13a3 3 0 01-3 3c-1.3 0-2.4-.84-2.82-2"/><path d="M12 16v5"/><path d="M8 21h8"/></svg>`,
+  leaf: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66L7 19c4-4 8-5 12-5 0-2.5 0-5-2-6z"/><path d="M11 14l-1.5 1.5"/></svg>`,
+  smile: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>`,
+  tear: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.5 8 4 12 4 15a8 8 0 0016 0c0-3-2.5-7-8-13z"/></svg>`,
+  shy: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="10.5" y2="10"/><line x1="15" y1="9" x2="13.5" y2="10"/></svg>`,
+  star: `<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>`,
+  book: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>`,
+  party: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l4 4-4 4"/><path d="M12 16h7"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/></svg>`,
+  secret: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/><circle cx="12" cy="16" r="1"/></svg>`,
+  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+  profile: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+  bookmark: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>`,
 }
 
 // Moods
 const moods = [
-  { value: 'love', icon: '🌿', key: 'mood_love' },
-  { value: 'happy', icon: '😊', key: 'mood_happy' },
-  { value: 'miss', icon: '🥺', key: 'mood_miss' },
-  { value: 'shy', icon: '🙈', key: 'mood_shy' },
-  { value: 'star', icon: '⭐', key: 'mood_star' },
+  { value: 'love', icon: icons.leaf, key: 'mood_love' },
+  { value: 'happy', icon: icons.smile, key: 'mood_happy' },
+  { value: 'miss', icon: icons.tear, key: 'mood_miss' },
+  { value: 'shy', icon: icons.shy, key: 'mood_shy' },
+  { value: 'star', icon: icons.star, key: 'mood_star' },
 ]
 
 
@@ -2222,7 +2243,7 @@ function miniEgg() {
 }
 
 function bookmarkEgg() {
-  showToast('🔖 ' + (currentLang.value === 'ko' ? '저장됨!' : 'Saved!'))
+  showToast(currentLang.value === 'ko' ? '저장됨!' : 'Saved!')
 }
 
 function quoteEgg() {
@@ -3013,9 +3034,11 @@ body{
 .dm-action-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;height:56px;font-size:11px;font-weight:600;border:none;cursor:pointer;flex:1;border-radius:12px;transition:transform 0.15s,opacity 0.15s;letter-spacing:0.3px}
 .dm-action-btn:active{transform:scale(0.92);opacity:0.85}
 .pin-btn{background:linear-gradient(135deg,#FFD43B,#F59F00);color:#5a3e00;box-shadow:0 2px 8px rgba(245,159,0,0.3)}
-.pin-btn .btn-icon{font-size:18px;margin-bottom:2px}
+.pin-btn .btn-icon{margin-bottom:2px}
+.pin-btn .btn-icon svg{width:18px;height:18px}
 .delete-btn{background:linear-gradient(135deg,#FF6B6B,#EE5A24);color:#fff;box-shadow:0 2px 8px rgba(238,90,36,0.3)}
-.delete-btn .btn-icon{font-size:18px;margin-bottom:2px}
+.delete-btn .btn-icon{margin-bottom:2px}
+.delete-btn .btn-icon svg{width:18px;height:18px}
 .dm-conv-item{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border-light);cursor:pointer;background:var(--bg-card);position:relative;z-index:2;transition:transform 0.25s ease-out;will-change:transform}
 .dm-conv-item:active{background:var(--bg)}
 .dm-conv-item.pinned{background:var(--bg-light)}
@@ -3163,7 +3186,8 @@ body{
 .story-item.add-story .story-thumb{background:var(--bg-card);color:var(--accent);font-size:20px;font-weight:600}
 .story-ring{padding:3px;border-radius:50%;background:linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)}
 .story-item.viewed .story-ring{background:var(--border)}
-.story-thumb{width:56px;height:56px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:24px;border:2px solid var(--bg-card)}
+.story-thumb{width:56px;height:56px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:24px;border:2px solid var(--bg-card);color:var(--accent)}
+.story-thumb svg{width:28px;height:28px}
 .story-name{font-size:11px;color:var(--text-light);max-width:58px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* ============ FEATURE CARD ============ */
@@ -3179,7 +3203,8 @@ body{
 .feature-card::before{display:none}
 .feature-card:hover{box-shadow:var(--shadow)}
 .feature-card:active{transform:scale(0.98)}
-.feature-icon{font-size:28px;margin-bottom:12px}
+.feature-icon{margin-bottom:12px;color:var(--accent)}
+.feature-icon svg{width:28px;height:28px}
 .feature-text{font-size:15px;line-height:1.6;margin-bottom:4px;color:var(--text)}
 .feature-text.accent{color:var(--text);font-weight:600;font-size:17px}
 .feature-dots{display:flex;gap:6px;margin-top:16px;justify-content:center}
@@ -3565,7 +3590,8 @@ body{
 /* ============ EASTER EGG ============ */
 .egg-page{position:fixed;inset:0;z-index:9997;background:linear-gradient(135deg,#0a0a0a,#1a1a1a,#0d0d0d);display:flex;align-items:center;justify-content:center;color:#fff;overflow:hidden}
 .egg-content{text-align:center;z-index:2;padding:40px;max-width:400px}
-.egg-heart{font-size:56px;margin-bottom:16px;animation:eggBounce 1.2s ease infinite}
+.egg-heart{margin-bottom:16px;animation:eggBounce 1.2s ease infinite;color:var(--accent)}
+.egg-heart svg{width:56px;height:56px}
 @keyframes eggBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
 .egg-title{font-size:24px;font-weight:300;margin-bottom:14px;letter-spacing:2px}
 .egg-text{font-size:13px;line-height:1.9;opacity:0.8;margin-bottom:16px}
@@ -3589,7 +3615,8 @@ body{
 .sv-content{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px}
 .sv-content.sv-has-image{padding:0}
 .sv-img{width:100%;height:100%;object-fit:contain;max-height:80vh}
-.sv-emoji{font-size:72px;margin-bottom:20px}
+.sv-emoji{margin-bottom:20px;color:var(--accent)}
+.sv-emoji svg{width:72px;height:72px}
 .sv-text{font-size:16px;text-align:center;line-height:1.8;white-space:pre-line;opacity:0.85}
 .sv-user{padding:14px;text-align:center}
 .sv-name{font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:1px}
