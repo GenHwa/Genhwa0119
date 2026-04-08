@@ -1578,6 +1578,8 @@ async function sendDmMessage() {
       })
       dmModal.newMessage = ''
       dmModal.sentCount++
+      // Refresh conversation list so it appears in DM page
+      loadDmConversations()
       // Scroll to bottom
       nextTick(() => {
         const dmContent = document.querySelector('.dm-content')
