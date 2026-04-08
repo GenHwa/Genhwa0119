@@ -2465,6 +2465,7 @@ function onDmItemTouchEnd(userId) {
   
   if (shouldOpen) {
     state.translateX = -140
+    closeOtherDmSwipes(userId)
   } else {
     state.translateX = 0
   }
@@ -2473,13 +2474,26 @@ function onDmItemTouchEnd(userId) {
   if (wrap) {
     const itemEl = wrap.querySelector('.dm-conv-item')
     if (itemEl) itemEl.style.transform = `translateX(${state.translateX}px)`
+    wrap.classList.toggle('swiped-open', shouldOpen)
   }
 }
 
 // Reset all swipes when clicking elsewhere
 function resetAllDmSwipes() {
-  document.querySelectorAll('.dm-conv-item-wrap .dm-conv-item').forEach(el => {
-    el.style.transform = 'translateX(0)'
+  document.querySelectorAll('.dm-conv-item-wrap').forEach(el => {
+    const item = el.querySelector('.dm-conv-item')
+    if (item) item.style.transform = ''
+    el.classList.remove('swiped-open')
+  })
+}
+
+function closeOtherDmSwipes(currentId) {
+  document.querySelectorAll('.dm-conv-item-wrap.swiped-open').forEach(el => {
+    if (el.dataset.userId !== String(currentId)) {
+      const item = el.querySelector('.dm-conv-item')
+      if (item) item.style.transform = ''
+      el.classList.remove('swiped-open')
+    }
   })
 }
 
@@ -2537,8 +2551,11 @@ function onDmItemMouseDown(e, userId) {
           
           if (currentX < -60) {
             itemEl.style.transform = 'translateX(-140px)'
+            wrap.classList.add('swiped-open')
+            closeOtherDmSwipes(userId)
           } else {
             itemEl.style.transform = 'translateX(0)'
+            wrap.classList.remove('swiped-open')
           }
         }
       }
@@ -3031,7 +3048,8 @@ body{
 .dm-list-page{padding:0}
 .dm-empty{text-align:center;padding:60px 20px;color:var(--text-light);font-size:14px}
 .dm-conv-item-wrap{position:relative;overflow:hidden;-webkit-overflow-scrolling:touch}
-.dm-conv-actions{position:absolute;right:0;top:0;bottom:0;display:flex;align-items:center;z-index:1;width:140px;flex-shrink:0;gap:6px;padding:0 8px;background:var(--bg-card)}
+.dm-conv-actions{position:absolute;right:0;top:0;bottom:0;display:flex;align-items:center;z-index:1;width:140px;flex-shrink:0;gap:6px;padding:0 8px;background:var(--bg-card);opacity:0;pointer-events:none;transition:opacity 0.25s ease}
+.dm-conv-item-wrap.swiped-open .dm-conv-actions{opacity:1;pointer-events:auto}
 .dm-action-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;height:44px;font-size:10px;font-weight:600;border:none;cursor:pointer;flex:1;border-radius:10px;transition:transform 0.15s,opacity 0.15s,box-shadow 0.2s;letter-spacing:0.3px;color:#fff}
 .dm-action-btn:active{transform:scale(0.92);opacity:0.85}
 .pin-btn{background:linear-gradient(135deg,#a29bfe,#6c5ce7);box-shadow:0 2px 12px rgba(108,92,231,0.35)}
