@@ -1577,7 +1577,14 @@ async function sendDmMessage() {
         created_at: t('timeJustNow')
       })
       dmModal.newMessage = ''
-      dmModal.sentCount++
+      // Re-fetch latest sent_count & can_send_unlimited from backend
+      try {
+        const res2 = await api.getDmHistory(dmModal.user.id, token)
+        if (res2.data.code === 200) {
+          dmModal.sentCount = res2.data.data.sent_count || 0
+          dmModal.canSendUnlimited = res2.data.data.can_send_unlimited
+        }
+      } catch (_) {}
       // Refresh conversation list so it appears in DM page
       loadDmConversations()
       // Scroll to bottom
@@ -1585,8 +1592,16 @@ async function sendDmMessage() {
         const dmContent = document.querySelector('.dm-content')
         if (dmContent) dmContent.scrollTop = dmContent.scrollHeight
       })
+    } else if (res.data.code === 403) {
+      showToast(t('dmLimitReached') || 'DM limit reached', 'warn')
+      try {
+        const res2 = await api.getDmHistory(dmModal.user.id, token)
+        if (res2.data.code === 200) {
+          dmModal.sentCount = res2.data.data.sent_count || 0
+          dmModal.canSendUnlimited = res2.data.data.can_send_unlimited
+        }
+      } catch (_) {}
     } else {
-      showToast(res.data.message || t('dmSendFail'), 'warn')
     }
   } catch (e) {
     showToast(t('dmSendFail'), 'warn')
