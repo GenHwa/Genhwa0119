@@ -2570,7 +2570,8 @@ async function pinDmConv(userId) {
         if (!a.isPinned && b.isPinned) return 1
         return (b.time || '').localeCompare(a.time || '')
       })
-      showToast(newPin ? t('pin') + ' ✓' : t('unpin') + ' ✓')
+      nextTick(() => resetAllDmSwipes())
+      showToast(newPin ? t('pin') + ' OK' : t('unpin') + ' OK')
     }
   } catch (e) {}
 }
@@ -2582,7 +2583,7 @@ async function deleteDmConv(userId) {
     const res = await api.deleteDmConversation(userId, api.getToken())
     if (res.data.code === 200) {
       dmConversations.value = dmConversations.value.filter(c => c.user.id !== userId)
-      showToast(t('deleteMsg') + ' ✓')
+      showToast(t('deleteMsg') + ' OK')
     }
   } catch (e) {}
 }
@@ -3030,15 +3031,15 @@ body{
 .dm-list-page{padding:0}
 .dm-empty{text-align:center;padding:60px 20px;color:var(--text-light);font-size:14px}
 .dm-conv-item-wrap{position:relative;overflow:hidden;-webkit-overflow-scrolling:touch}
-.dm-conv-actions{position:absolute;right:0;top:0;bottom:0;display:flex;align-items:center;z-index:1;width:140px;flex-shrink:0;gap:6px;padding:0 8px}
-.dm-action-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;height:56px;font-size:11px;font-weight:600;border:none;cursor:pointer;flex:1;border-radius:12px;transition:transform 0.15s,opacity 0.15s;letter-spacing:0.3px}
+.dm-conv-actions{position:absolute;right:0;top:0;bottom:0;display:flex;align-items:center;z-index:1;width:140px;flex-shrink:0;gap:6px;padding:0 8px;background:var(--bg-card)}
+.dm-action-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;height:44px;font-size:10px;font-weight:600;border:none;cursor:pointer;flex:1;border-radius:10px;transition:transform 0.15s,opacity 0.15s,box-shadow 0.2s;letter-spacing:0.3px;color:#fff}
 .dm-action-btn:active{transform:scale(0.92);opacity:0.85}
-.pin-btn{background:linear-gradient(135deg,#FFD43B,#F59F00);color:#5a3e00;box-shadow:0 2px 8px rgba(245,159,0,0.3)}
-.pin-btn .btn-icon{margin-bottom:2px}
-.pin-btn .btn-icon svg{width:18px;height:18px}
-.delete-btn{background:linear-gradient(135deg,#FF6B6B,#EE5A24);color:#fff;box-shadow:0 2px 8px rgba(238,90,36,0.3)}
-.delete-btn .btn-icon{margin-bottom:2px}
-.delete-btn .btn-icon svg{width:18px;height:18px}
+.pin-btn{background:linear-gradient(135deg,#a29bfe,#6c5ce7);box-shadow:0 2px 12px rgba(108,92,231,0.35)}
+.pin-btn .btn-icon{margin-bottom:1px}
+.pin-btn .btn-icon svg{width:16px;height:16px}
+.delete-btn{background:linear-gradient(135deg,#fd79a8,#e17055);box-shadow:0 2px 12px rgba(225,112,85,0.35)}
+.delete-btn .btn-icon{margin-bottom:1px}
+.delete-btn .btn-icon svg{width:16px;height:16px}
 .dm-conv-item{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border-light);cursor:pointer;background:var(--bg-card);position:relative;z-index:2;transition:transform 0.25s ease-out;will-change:transform}
 .dm-conv-item:active{background:var(--bg)}
 .dm-conv-item.pinned{background:var(--bg-light)}
