@@ -13,12 +13,17 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
-    # API 代理到后端
+    # API 代理到后端 (含 WebSocket 支持)
     location /api/ {
         proxy_pass http://127.0.0.1:520;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
     }
 
     # 上传文件代理到后端

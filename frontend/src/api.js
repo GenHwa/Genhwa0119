@@ -95,6 +95,12 @@ export const pinDmConversation = (otherUserId, pin, token = '') => api.put(`/api
 export const markDmAsRead = (otherUserId, token = '') => api.put(`/api/dm/${otherUserId}/read`, null, { params: { token } })
 export const getDmConversations = (token = '') => api.get('/api/dm/conversations', { params: { token } })
 
+// WebSocket URL helper - auto-detect protocol
+export function getWsUrl() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${proto}//${location.host}/api/dm/ws`
+}
+
 // Stories
 export const getStories = (token = '') => api.get('/api/stories', { params: { token } })
 export const uploadStory = (formData) => api.post('/api/stories', formData, {

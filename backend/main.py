@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
@@ -10,6 +10,7 @@ import os
 import hashlib
 import json
 import jwt
+import asyncio
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -1598,3 +1599,112 @@ def pin_dm_conversation(other_user_id: int, token: str = "", pin: int = 1):
         return {"code": 500, "message": str(e)}
     finally:
         conn.close()
+
+
+# ============ WebSocket Real-time DM ============
+
+class ConnectionManager:
+    """Manage active WebSocket connections by user_id."""
+
+    def __init__(self):
+        # {user_id: [websocket, ...]}
+        self.active_connections: dict[int, list[WebSocket]] = {}
+
+    async def connect(self, user_id: int, ws: WebSocket):
+        await ws.accept()
+        if user_id not in self.active_connections:
+            self.active_connections[user_id] = []
+        self.active_connections[user_id].append(ws)
+
+    def disconnect(self, user_id: int, ws: WebSocket):
+        if user_id in self.active_connections:
+            if ws in self.active_connections[user_id]:
+                self.active_connections[user_id].remove(ws)
+            if not self.active_connections[user_id]:
+                del self.active_connections[user_id]
+
+    async def send_personal(self, message: dict, user_id: int):
+        """Send a message to all connections of a specific user."""
+        if user_id in self.active_connections:
+            for conn in list(self.active_connections[user_id]):
+                try:
+                    await conn.send_json(message)
+                except:
+                    self.disconnect(user_id, conn)
+
+    async def broadcast(self, message: dict):
+        """Send to all connected users."""
+        for uid in list(self.active_connections.keys()):
+            await self.send_personal(message, uid)
+
+
+manager = ConnectionManager()
+
+
+@app.websocket("/api/dm/ws")
+async def dm_websocket(ws: WebSocket):
+    """WebSocket endpoint for real-time DM. Auth via query param token."""
+    token = ws.query_params.get("token", "")
+    if not token:
+        await ws.close(code=4001, reason="No token")
+        return
+
+    current_user = decode_token(token)
+    if not current_user:
+        await ws.close(code=4001, reason="Invalid token")
+        return
+
+    user_id = current_user["user_id"]
+    await manager.connect(user_id, ws)
+    try:
+        # Send connected confirmation
+        await ws.send_json({"type": "system", "text": "connected"})
+
+        while True:
+            data = await ws.receive_text()
+            msg = json.loads(data)
+
+            action = msg.get("action")
+
+            if action == "send":
+                receiver_id = int(msg.get("receiver_id"))
+                content = (msg.get("content") or "").strip()
+
+                if not content or not receiver_id:
+                    await ws.send_json({"type": "error", "text": "Invalid message"})
+                    continue
+
+                # Build message payload
+                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                payload = {
+                    "type": "message",
+                    "sender_id": user_id,
+                    "sender_name": current_user.get("username") or "",
+                    "receiver_id": receiver_id,
+                    "content": content,
+                    "created_at": now_str,
+                }
+
+                # Send to receiver
+                await manager.send_personal(payload, receiver_id)
+                # Echo back to sender (so they see it in their own chat)
+                await manager.send_personal(payload, user_id)
+
+            elif action == "typing":
+                receiver_id = int(msg.get("receiver_id"))
+                await manager.send_personal({
+                    "type": "typing",
+                    "from_user_id": user_id,
+                    "from_username": current_user.get("username") or "",
+                    "receiver_id": receiver_id,
+                }, receiver_id)
+
+            elif action == "ping":
+                await ws.send_json({"type": "pong"})
+
+    except WebSocketDisconnect:
+        manager.disconnect(user_id, ws)
+    except json.JSONDecodeError:
+        pass
+    except Exception as e:
+        manager.disconnect(user_id, ws)

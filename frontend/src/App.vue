@@ -220,11 +220,13 @@
             <div v-else class="dm-empty">{{ t('noMessages') }}</div>
           </div>
           <div class="dm-input-wrap">
+            <div v-if="typingFromUser" class="typing-indicator">{{ t('typingIsWriting', typingFromUser.username) }}</div>
             <div class="dm-input-box">
               <input v-model="dmModal.newMessage" type="text" 
                 :placeholder="dmModal.canSendUnlimited ? t('dmPlaceholder') : dmModal.sentCount >= 3 ? t('dmLimitReached') : t('dmPlaceholder')" 
                 :disabled="!dmModal.canSendUnlimited && dmModal.sentCount >= 3"
-                @keyup.enter="sendDmMessage" />
+                @keyup.enter="sendDmMessage"
+                @input="onDmInputTyping" />
               <button class="dm-send-btn" @click="sendDmMessage" 
                 :disabled="!dmModal.newMessage.trim() || (!dmModal.canSendUnlimited && dmModal.sentCount >= 3)"
                 :class="{ active: !!dmModal.newMessage.trim() }">
@@ -946,7 +948,7 @@ const i18n = {
     noPhotos: '아직 사진이 없어요\n첫 사진을 올려보세요!',
     noComments: '아직 댓글이 없어요',
     searchUser: '사용자 검색...', noSearchResult: '검색 결과가 없어요', searchAll: '사용자, 게시물 검색...', users: '사용자',
-    follow: '팔로우', following: '팔로잉', followers: '팔로워', posts: '게시물', followDone: '팔로우 완료', unfollowDone: '팔로우 취소', mutual: '맞팔', remove: '차단', followerRemoved: '팔로워 제거됨', add: '추가', messages: '메시지', noMessages: '아직 메시지가 없어요', storyPosted: '스토리 게시됨', pin: '고정', unpin: '고정 해제', dmLimit1: '단방향 팔로우 시 최대 3개 메시지', dmLimit2: (n) => `${n}/3개 전송됨 (맞팔 후 무제한)`, dmLimitReached: '도달', dmPlaceholder: '메시지 보내기...', dmSend: '보내기', dmSendFail: '실패', dmDeleteConfirm: '이 대화를 삭제할까요?',
+    follow: '팔로우', following: '팔로잉', followers: '팔로워', posts: '게시물', followDone: '팔로우 완료', unfollowDone: '팔로우 취소', mutual: '맞팔', remove: '차단', followerRemoved: '팔로워 제거됨', add: '추가', messages: '메시지', noMessages: '아직 메시지가 없어요', storyPosted: '스토리 게시됨', pin: '고정', unpin: '고정 해제', dmLimit1: '단방향 팔로우 시 최대 3개 메시지', dmLimit2: (n) => `${n}/3개 전송됨 (맞팔 후 무제한)`, dmLimitReached: '도달', dmPlaceholder: '메시지 보내기...', dmSend: '보내기', dmSendFail: '실패', dmDeleteConfirm: '이 대화를 삭제할까요?', typingIsWriting: (n) => `${n}님이 답변을 쓰고 있어요...`,
     comments: '댓글',
     footer: 'everyday',
     mood_love: '평온', mood_happy: '행복', mood_miss: '그리움', mood_shy: '수줍음', mood_star: '별',
@@ -989,7 +991,7 @@ const i18n = {
     noPhotos: 'No photos yet\nUpload the first one!',
     noComments: 'No comments yet',
     searchUser: 'Search users...', noSearchResult: 'No results found', searchAll: 'Search users, posts...', users: 'Users',
-    follow: 'Follow', following: 'Following', followers: 'Followers', posts: 'Posts', followDone: 'Followed', unfollowDone: 'Unfollowed', mutual: 'Mutual', remove: 'Remove', followerRemoved: 'Follower removed', add: 'Add', messages: 'Messages', noMessages: 'No messages yet', storyPosted: 'Story posted', pin: 'Pin', unpin: 'Unpin', dmLimit1: 'Max 3 messages for one-way follow', dmLimit2: (n) => `${n}/3 sent (unlimited after mutual)`, dmLimitReached: 'Limit reached', dmPlaceholder: 'Send message...', dmSend: 'Send', dmSendFail: 'Failed', dmDeleteConfirm: 'Delete this conversation?',
+    follow: 'Follow', following: 'Following', followers: 'Followers', posts: 'Posts', followDone: 'Followed', unfollowDone: 'Unfollowed', mutual: 'Mutual', remove: 'Remove', followerRemoved: 'Follower removed', add: 'Add', messages: 'Messages', noMessages: 'No messages yet', storyPosted: 'Story posted', pin: 'Pin', unpin: 'Unpin', dmLimit1: 'Max 3 messages for one-way follow', dmLimit2: (n) => `${n}/3 sent (unlimited after mutual)`, dmLimitReached: 'Limit reached', dmPlaceholder: 'Send message...', dmSend: 'Send', dmSendFail: 'Failed', dmDeleteConfirm: 'Delete this conversation?', typingIsWriting: (n) => `${n} is typing...`,
     comments: 'Comments',
     footer: 'everyday',
     mood_love: 'Calm', mood_happy: 'Happy', mood_miss: 'Miss', mood_shy: 'Shy', mood_star: 'Star',
@@ -1032,7 +1034,7 @@ const i18n = {
     noPhotos: 'まだ写真がありません\n最初の写真を投稿しましょう！',
     noComments: 'まだコメントがありません',
     searchUser: 'ユーザー検索...', noSearchResult: '検索結果がありません', searchAll: 'ユーザー、投稿を検索...', users: 'ユーザー',
-    follow: 'フォロー', following: 'フォロー中', followers: 'フォロワー', posts: '投稿', followDone: 'フォローしました', unfollowDone: 'フォロー解除', mutual: '相互フォロー', remove: '削除', followerRemoved: 'フォロワーを削除しました', add: '追加', messages: 'メッセージ', noMessages: 'メッセージはまだありません', storyPosted: 'ストーリーを投稿しました', pin: 'ピン留め', unpin: 'ピン解除', dmLimit1: '片思料は最大3通', dmLimit2: (n) => `${n}/3送信済み ( 맞팔後は無制限)`, dmLimitReached: '上限', dmPlaceholder: 'メッセージを入力...', dmSend: '送信', dmSendFail: '失敗', dmDeleteConfirm: 'この会話を削除しますか?',
+    follow: 'フォロー', following: 'フォロー中', followers: 'フォロワー', posts: '投稿', followDone: 'フォローしました', unfollowDone: 'フォロー解除', mutual: '相互フォロー', remove: '削除', followerRemoved: 'フォロワーを削除しました', add: '追加', messages: 'メッセージ', noMessages: 'メッセージはまだありません', storyPosted: 'ストーリーを投稿しました', pin: 'ピン留め', unpin: 'ピン解除', dmLimit1: '片思料は最大3通', dmLimit2: (n) => `${n}/3送信済み ( 맞팔後は無制限)`, dmLimitReached: '上限', dmPlaceholder: 'メッセージを入力...', dmSend: '送信', dmSendFail: '失敗', dmDeleteConfirm: 'この会話を削除しますか?', typingIsWriting: (n) => `${n}さんが入力中...`,
     comments: 'コメント',
     footer: 'everyday',
     mood_love: '穏やか', mood_happy: '嬉しい', mood_miss: '会いたい', mood_shy: '恥ずかしい', mood_star: '星',
@@ -1075,7 +1077,7 @@ const i18n = {
     noPhotos: '还没有照片\n发第一条动态吧！',
     noComments: '还没有评论',
     searchUser: '搜索用户...', noSearchResult: '没有找到结果', searchAll: '搜索用户、动态...', users: '用户',
-    follow: '关注', following: '已关注', followers: '粉丝', posts: '作品', followDone: '关注成功', unfollowDone: '已取消关注', mutual: '互关', remove: '移除', followerRemoved: '已移除粉丝', add: '添加', messages: '私信', noMessages: '暂无私信', storyPosted: 'Story已发布', pin: '置顶', unpin: '取消置顶', dmLimit1: '单方关注最多3条消息', dmLimit2: (n) => `已发送 ${n}/3条 (互关后无限制)`, dmLimitReached: '已达上限', dmPlaceholder: '发送消息...', dmSend: '发送', dmSendFail: '发送失败', dmDeleteConfirm: '确定删除此对话吗？',
+    follow: '关注', following: '已关注', followers: '粉丝', posts: '作品', followDone: '关注成功', unfollowDone: '已取消关注', mutual: '互关', remove: '移除', followerRemoved: '已移除粉丝', add: '添加', messages: '私信', noMessages: '暂无私信', storyPosted: 'Story已发布', pin: '置顶', unpin: '取消置顶', dmLimit1: '单方关注最多3条消息', dmLimit2: (n) => `已发送 ${n}/3条 (互关后无限制)`, dmLimitReached: '已达上限', dmPlaceholder: '发送消息...', dmSend: '发送', dmSendFail: '发送失败', dmDeleteConfirm: '确定删除此对话吗？', typingIsWriting: (n) => `${n}正在输入...`,
     comments: '评论',
     footer: 'everyday',
     mood_love: '平静', mood_happy: '开心', mood_miss: '想念', mood_shy: '害羞', mood_star: '星星',
@@ -1213,6 +1215,104 @@ const dmModal = reactive({
   newMessage: ''
 })
 
+// ============ WebSocket Real-time DM ============
+
+function connectWs() {
+  if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return
+  const token = api.getToken()
+  if (!token || !currentUser.value) return
+
+  try {
+    ws = new WebSocket(`${api.getWsUrl()}?token=${token}`)
+
+    ws.onopen = () => {
+      console.log('[WS] Connected')
+      // Start ping/pong keepalive
+      clearInterval(wsPingInterval)
+      wsPingInterval = setInterval(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ action: 'ping' }))
+      }, 25000)
+    }
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data)
+        handleWsMessage(msg)
+      } catch (_) {}
+    }
+
+    ws.onclose = () => {
+      console.log('[WS] Disconnected, reconnecting in 3s...')
+      clearInterval(wsPingInterval)
+      scheduleReconnect()
+    }
+
+    ws.onerror = () => { ws.close() }
+  } catch (e) {
+    console.error('[WS] Connection error:', e)
+    scheduleReconnect()
+  }
+}
+
+function scheduleReconnect() {
+  clearTimeout(wsReconnectTimer)
+  wsReconnectTimer = setTimeout(() => {
+    if (currentUser.value) connectWs()
+  }, 3000)
+}
+
+function disconnectWs() {
+  clearTimeout(wsReconnectTimer)
+  clearInterval(wsPingInterval)
+  if (ws) { ws.close(); ws = null }
+}
+
+function handleWsMessage(msg) {
+  if (msg.type === 'message') {
+    // If this DM modal is open for the sender or receiver, append message
+    if (dmModal.show && dmModal.user &&
+        ((msg.sender_id === currentUser.value?.id && msg.receiver_id === dmModal.user.id) ||
+         (msg.sender_id === dmModal.user.id && msg.receiver_id === currentUser.value?.id))) {
+      dmModal.messages.push({
+        sender_id: msg.sender_id,
+        receiver_id: msg.receiver_id,
+        content: msg.content,
+        created_at: msg.created_at,
+      })
+      nextTick(() => {
+        const el = document.querySelector('.dm-content')
+        if (el) el.scrollTop = el.scrollHeight
+      })
+    }
+    // Refresh conversation list
+    loadDmConversations()
+    // Update unread badge if I'm the receiver
+    if (msg.receiver_id === currentUser.value?.id) fetchUnreadDmCount()
+  } else if (msg.type === 'typing') {
+    if (dmModal.show && dmModal.user && msg.from_user_id === dmModal.user.id) {
+      typingFromUser.value = { username: msg.from_username }
+      clearTimeout(dmTypingTimer)
+      dmTypingTimer = setTimeout(() => { typingFromUser.value = null }, 3000)
+    }
+  } else if (msg.type === 'system' || msg.type === 'error') {
+    // ignore
+  }
+}
+
+let dmTypingTimer = null
+
+function sendWsMessage(receiverId, content) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return false
+  ws.send(JSON.stringify({ action: 'send', receiver_id: receiverId, content }))
+  return true
+}
+
+function sendTypingIndicator(receiverId) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return
+  ws.send(JSON.stringify({ action: 'typing', receiver_id: receiverId }))
+}
+
+
 // DM Conversations list (for DM page)
 const dmConversations = ref([])
 
@@ -1221,6 +1321,12 @@ const unreadDmCount = ref(0)
 
 // DM swipe state
 const dmSwipeState = reactive({})
+
+// WebSocket for real-time DM
+let ws = null
+let wsReconnectTimer = null
+let wsPingInterval = null
+const typingFromUser = ref(null) // { username } or null
 
 async function loadDmConversations() {
   if (!currentUser.value) return
@@ -1561,23 +1667,36 @@ async function sendDmMessage() {
     return
   }
   
-  // Check limit
-  if (!dmModal.canSendUnlimited && dmModal.sentCount >= 3) {
-    showToast(t('dmLimit1') + ' - ' + t('dmLimitReached'), 'warn')
+  const text = dmModal.newMessage.trim()
+  
+  // Try WebSocket first (real-time, no DB)
+  if (sendWsMessage(dmModal.user.id, text)) {
+    dmModal.messages.push({
+      sender_id: currentUser.value.id,
+      receiver_id: dmModal.user.id,
+      content: text,
+      created_at: t('timeJustNow')
+    })
+    dmModal.newMessage = ''
+    // Scroll
+    nextTick(() => {
+      const el = document.querySelector('.dm-content')
+      if (el) el.scrollTop = el.scrollHeight
+    })
     return
   }
   
+  // Fallback to HTTP (if WS not connected, or for mutual-follow unlimited tracking)
   try {
-    const res = await api.sendDm(dmModal.user.id, dmModal.newMessage.trim(), token)
+    const res = await api.sendDm(dmModal.user.id, text, token)
     if (res.data.code === 200) {
       dmModal.messages.push({
         sender_id: currentUser.value.id,
         receiver_id: dmModal.user.id,
-        content: dmModal.newMessage.trim(),
+        content: text,
         created_at: t('timeJustNow')
       })
       dmModal.newMessage = ''
-      // Re-fetch latest sent_count & can_send_unlimited from backend
       try {
         const res2 = await api.getDmHistory(dmModal.user.id, token)
         if (res2.data.code === 200) {
@@ -1585,27 +1704,26 @@ async function sendDmMessage() {
           dmModal.canSendUnlimited = res2.data.data.can_send_unlimited
         }
       } catch (_) {}
-      // Refresh conversation list so it appears in DM page
       loadDmConversations()
-      // Scroll to bottom
       nextTick(() => {
-        const dmContent = document.querySelector('.dm-content')
-        if (dmContent) dmContent.scrollTop = dmContent.scrollHeight
+        const el = document.querySelector('.dm-content')
+        if (el) el.scrollTop = el.scrollHeight
       })
     } else if (res.data.code === 403) {
       showToast(t('dmLimitReached') || 'DM limit reached', 'warn')
-      try {
-        const res2 = await api.getDmHistory(dmModal.user.id, token)
-        if (res2.data.code === 200) {
-          dmModal.sentCount = res2.data.data.sent_count || 0
-          dmModal.canSendUnlimited = res2.data.data.can_send_unlimited
-        }
-      } catch (_) {}
-    } else {
     }
   } catch (e) {
     showToast(t('dmSendFail'), 'warn')
   }
+}
+
+// Typing indicator with debounce
+let typingDebounce = null
+function onDmInputTyping() {
+  if (!dmModal.user || !dmModal.newMessage.trim()) return
+  clearTimeout(typingDebounce)
+  sendTypingIndicator(dmModal.user.id)
+  typingDebounce = setTimeout(() => {}, 3000) // reset after 3s, server handles display duration
 }
 
 const toast = reactive({ show: false, message: '', type: 'success' })
@@ -1765,6 +1883,7 @@ async function handleAuth() {
         currentUser.value = res.data.user
         initProfileEdit()
         showToast(t('registerOk'))
+        connectWs()
         authUsername.value = ''
         authPassword.value = ''
         authNickname.value = ''
@@ -1785,6 +1904,7 @@ async function handleAuth() {
         authUsername.value = ''
         authPassword.value = ''
         fetchData()
+        connectWs()
         fetchMyContent()
         activeSection.value = pendingSection.value || 'home'
         pendingSection.value = null
@@ -1808,6 +1928,7 @@ function logout() {
   editEmail.value = ''
   oldPassword.value = ''
   newPassword.value = ''
+  disconnectWs()
   showToast(t('logout'))
   fetchData()
   activeSection.value = 'login'
@@ -2796,7 +2917,7 @@ onMounted(() => {
     mainEl.addEventListener('touchend', onTouchEnd)
   }
   setupInfiniteScroll()
-  checkAuth().then(() => { fetchData(); fetchMyContent() })
+  checkAuth().then(() => { fetchData(); fetchMyContent(); if (currentUser.value) connectWs() })
   window.addEventListener('keydown', onKeyDown)
   quoteInterval = setInterval(() => {
     currentQuote.value = (currentQuote.value + 1) % 3
@@ -2813,6 +2934,7 @@ onUnmounted(() => {
   }
   scrollObserver?.disconnect()
   if (quoteInterval) clearInterval(quoteInterval)
+  disconnectWs()
 })
 </script>
 
@@ -3030,6 +3152,8 @@ body{
 .dm-time{font-size:10.5px;color:var(--text-light);opacity:0.7}
 .dm-read{font-size:11px;color:var(--accent);font-weight:600;letter-spacing:1px}
 .dm-input-wrap{padding:14px 16px 16px;background:var(--bg);border-top:1px solid rgba(0,0,0,0.06)}
+.typing-indicator{font-size:12px;color:var(--text-light);padding:0 4px 6px;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:0.5}50%{opacity:1}}
 .dm-input-box{display:flex;align-items:center;gap:8px;background:var(--bg-card);border-radius:26px;padding:4px 6px 4px 16px;border:1.5px solid rgba(0,0,0,0.08);transition:border-color .2s,box-shadow .2s}
 .dm-input-box:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),0.12)}
 .dm-input-box input{flex:1;border:none;background:transparent;font-size:14px;color:var(--text);padding:10px 4px;outline:none;min-width:0}
