@@ -220,13 +220,11 @@
             <div v-else class="dm-empty">{{ t('noMessages') }}</div>
           </div>
           <div class="dm-input-wrap">
-            <div v-if="typingFromUser" class="typing-indicator">{{ t('typingIsWriting', typingFromUser.username) }}</div>
             <div class="dm-input-box">
               <input v-model="dmModal.newMessage" type="text" 
                 :placeholder="dmModal.canSendUnlimited ? t('dmPlaceholder') : dmModal.sentCount >= 3 ? t('dmLimitReached') : t('dmPlaceholder')" 
                 :disabled="!dmModal.canSendUnlimited && dmModal.sentCount >= 3"
-                @keyup.enter="sendDmMessage"
-                @input="onDmInputTyping" />
+                @keyup.enter="sendDmMessage" />
               <button class="dm-send-btn" @click="sendDmMessage" 
                 :disabled="!dmModal.newMessage.trim() || (!dmModal.canSendUnlimited && dmModal.sentCount >= 3)"
                 :class="{ active: !!dmModal.newMessage.trim() }">
@@ -519,50 +517,47 @@
         </div>
       </section>
 
-      <!-- ===== COMMENTS MODAL ===== -->
-      <transition name="fade">
-        <div v-if="showCommentsPanel" class="comment-modal-overlay" @click.self="showCommentsPanel = false">
-          <transition name="scale-in">
-            <div v-if="showCommentsPanel" class="comment-modal" @click.stop>
-              <div class="cp-header">
-                <span class="cp-title">{{ t('comments') }}</span>
-                <button class="cp-close" @click="showCommentsPanel = false"><span v-html="icons.check"></span></button>
+      <!-- ===== COMMENTS FULL ===== -->
+      <transition name="slide-up">
+        <div v-if="showCommentsPanel" class="comments-panel">
+          <div class="cp-header">
+            <button class="cp-back" @click="showCommentsPanel = false">←</button>
+            <span class="cp-title">{{ t('comments') }}</span>
+            <div style="width:24px"></div>
+          </div>
+          <div class="cp-list">
+            <div v-for="c in commentsList" :key="c.id" class="cp-item">
+              <div class="cp-avatar" :class="{ 'no-avatar-text': c.avatar }">
+                <img v-if="c.avatar" :src="UPLOAD_BASE + c.avatar" class="avatar-img" />
+                <span v-else>{{ c.nickname.charAt(0) }}</span>
               </div>
-              <div class="cp-list">
-                <div v-for="c in commentsList" :key="c.id" class="cp-item">
-                  <div class="cp-avatar" :class="{ 'no-avatar-text': c.avatar }">
-                    <img v-if="c.avatar" :src="UPLOAD_BASE + c.avatar" class="avatar-img" />
-                    <span v-else>{{ c.nickname.charAt(0) }}</span>
-                  </div>
-                  <div class="cp-body">
-                    <div class="cp-meta">
-                      <strong>{{ c.nickname }}</strong>
-                      <span class="cp-time">{{ formatTimeAgo(c.created_at) }}</span>
-                      <div v-if="isCommentOwner(c)" class="cp-actions">
-                        <button class="cp-action-btn" @click="startEditComment(c)" title="edit"><span class="icon-line icon-sm" v-html="icons.edit"></span></button>
-                        <button class="cp-action-btn cp-delete" @click="handleDeleteComment(c.id)" title="delete"><span class="icon-line icon-sm icon-delete" v-html="icons.trash"></span></button>
-                      </div>
-                    </div>
-                    <div v-if="editingCommentId === c.id" class="cp-edit-wrap">
-                      <input v-model="editingCommentContent" class="cp-edit-input" @keyup.enter="confirmEditComment(c.id)" />
-                      <div class="cp-edit-actions">
-                        <button class="btn-cancel" @click="editingCommentId = null" style="font-size:12px;padding:6px 12px">{{ t('cancel') }}</button>
-                        <button class="btn-confirm" @click="confirmEditComment(c.id)" style="font-size:12px;padding:6px 12px">{{ t('save') }}</button>
-                      </div>
-                    </div>
-                    <p v-else>{{ c.content }}</p>
+              <div class="cp-body">
+                <div class="cp-meta">
+                  <strong>{{ c.nickname }}</strong>
+                  <span class="cp-time">{{ formatTimeAgo(c.created_at) }}</span>
+                  <div v-if="isCommentOwner(c)" class="cp-actions">
+                    <button class="cp-action-btn" @click="startEditComment(c)" title="edit"><span class="icon-line icon-sm" v-html="icons.edit"></span></button>
+                    <button class="cp-action-btn cp-delete" @click="handleDeleteComment(c.id)" title="delete"><span class="icon-line icon-sm icon-delete" v-html="icons.trash"></span></button>
                   </div>
                 </div>
-                <div v-if="!commentsList.length" class="cp-empty">{{ t('noComments') }}</div>
-              </div>
-              <div class="cp-input-bar">
-                <input v-model="commentNickname" :placeholder="t('yourName')" class="cp-name" />
-                <input v-model="commentText" :placeholder="t('addComment')" class="cp-input"
-                  @keyup.enter="submitComment" />
-                <button class="cp-send" @click="submitComment">{{ t('post') }}</button>
+                <div v-if="editingCommentId === c.id" class="cp-edit-wrap">
+                  <input v-model="editingCommentContent" class="cp-edit-input" @keyup.enter="confirmEditComment(c.id)" />
+                  <div class="cp-edit-actions">
+                    <button class="btn-cancel" @click="editingCommentId = null" style="font-size:12px;padding:6px 12px">{{ t('cancel') }}</button>
+                    <button class="btn-confirm" @click="confirmEditComment(c.id)" style="font-size:12px;padding:6px 12px">{{ t('save') }}</button>
+                  </div>
+                </div>
+                <p v-else>{{ c.content }}</p>
               </div>
             </div>
-          </transition>
+            <div v-if="!commentsList.length" class="cp-empty">{{ t('noComments') }}</div>
+          </div>
+          <div class="cp-input-bar">
+            <input v-model="commentNickname" :placeholder="t('yourName')" class="cp-name" />
+            <input v-model="commentText" :placeholder="t('addComment')" class="cp-input"
+              @keyup.enter="submitComment" />
+            <button class="cp-send" @click="submitComment">{{ t('post') }}</button>
+          </div>
         </div>
       </transition>
 
@@ -926,6 +921,36 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from
 import * as api from './api.js'
 import { BASE_URL, UPLOAD_BASE } from './api.js'
 
+// ============ Icons (must be defined first — used by other declarations) ============
+const icons = {
+  edit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
+  lock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>`,
+  unlock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg>`,
+  trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`,
+  warn: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+  pin: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6m0 0a4 4 0 014 4v2h-8v-2a4 4 0 014-4z"/><path d="M8 14v6l4-2 4 2v-6"/></svg>`,
+  unpin: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6m0 0a4 4 0 014 4v2h-8v-2a4 4 0 014-4z"/><path d="M8 14l-2 4m4-2l-2 2m4 0l2 2m-2-2l2 4"/></svg>`,
+  location: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>`,
+  sparkle: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"/></svg>`,
+  camera: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>`,
+  comment: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/></svg>`,
+  heart: `<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>`,
+  sun: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`,
+  moon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>`,
+  flower: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="3"/><path d="M12 2a3 3 0 00-3 3c0 1.3.84 2.4 2 2.82"/><path d="M12 2a3 3 0 013 3c0 1.3-.84 2.4-2 2.82"/><path d="M5.08 7.02a3 3 0 00.67 4.18c1.1.72 2.56.55 3.48-.35"/><path d="M18.92 7.02a3 3 0 01-.67 4.18c-1.1.72-2.56.55-3.48-.35"/><path d="M8 13a3 3 0 003 3c1.3 0 2.4-.84 2.82-2"/><path d="M16 13a3 3 0 01-3 3c-1.3 0-2.4-.84-2.82-2"/><path d="M12 16v5"/><path d="M8 21h8"/></svg>`,
+  leaf: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66L7 19c4-4 8-5 12-5 0-2.5 0-5-2-6z"/><path d="M11 14l-1.5 1.5"/></svg>`,
+  smile: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>`,
+  tear: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.5 8 4 12 4 15a8 8 0 0016 0c0-3-2.5-7-8-13z"/></svg>`,
+  shy: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="10.5" y2="10"/><line x1="15" y1="9" x2="13.5" y2="10"/></svg>`,
+  star: `<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>`,
+  book: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>`,
+  party: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l4 4-4 4"/><path d="M12 16h7"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/></svg>`,
+  secret: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/><circle cx="12" cy="16" r="1"/></svg>`,
+  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+  profile: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
+  bookmark: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>`,
+}
+
 // ============ i18n ============
 const currentLang = ref('ko')
 const darkMode = ref(localStorage.getItem('diary_dark') === '1')
@@ -948,7 +973,7 @@ const i18n = {
     noPhotos: '아직 사진이 없어요\n첫 사진을 올려보세요!',
     noComments: '아직 댓글이 없어요',
     searchUser: '사용자 검색...', noSearchResult: '검색 결과가 없어요', searchAll: '사용자, 게시물 검색...', users: '사용자',
-    follow: '팔로우', following: '팔로잉', followers: '팔로워', posts: '게시물', followDone: '팔로우 완료', unfollowDone: '팔로우 취소', mutual: '맞팔', remove: '차단', followerRemoved: '팔로워 제거됨', add: '추가', messages: '메시지', noMessages: '아직 메시지가 없어요', storyPosted: '스토리 게시됨', pin: '고정', unpin: '고정 해제', dmLimit1: '단방향 팔로우 시 최대 3개 메시지', dmLimit2: (n) => `${n}/3개 전송됨 (맞팔 후 무제한)`, dmLimitReached: '도달', dmPlaceholder: '메시지 보내기...', dmSend: '보내기', dmSendFail: '실패', dmDeleteConfirm: '이 대화를 삭제할까요?', typingIsWriting: (n) => `${n}님이 답변을 쓰고 있어요...`,
+    follow: '팔로우', following: '팔로잉', followers: '팔로워', posts: '게시물', followDone: '팔로우 완료', unfollowDone: '팔로우 취소', mutual: '맞팔', remove: '차단', followerRemoved: '팔로워 제거됨', add: '추가', messages: '메시지', noMessages: '아직 메시지가 없어요', storyPosted: '스토리 게시됨', pin: '고정', unpin: '고정 해제', dmLimit1: '단방향 팔로우 시 최대 3개 메시지', dmLimit2: (n) => `${n}/3개 전송됨 (맞팔 후 무제한)`, dmLimitReached: '도달', dmPlaceholder: '메시지 보내기...', dmSend: '보내기', dmSendFail: '실패', dmDeleteConfirm: '이 대화를 삭제할까요?',
     comments: '댓글',
     footer: 'everyday',
     mood_love: '평온', mood_happy: '행복', mood_miss: '그리움', mood_shy: '수줍음', mood_star: '별',
@@ -991,7 +1016,7 @@ const i18n = {
     noPhotos: 'No photos yet\nUpload the first one!',
     noComments: 'No comments yet',
     searchUser: 'Search users...', noSearchResult: 'No results found', searchAll: 'Search users, posts...', users: 'Users',
-    follow: 'Follow', following: 'Following', followers: 'Followers', posts: 'Posts', followDone: 'Followed', unfollowDone: 'Unfollowed', mutual: 'Mutual', remove: 'Remove', followerRemoved: 'Follower removed', add: 'Add', messages: 'Messages', noMessages: 'No messages yet', storyPosted: 'Story posted', pin: 'Pin', unpin: 'Unpin', dmLimit1: 'Max 3 messages for one-way follow', dmLimit2: (n) => `${n}/3 sent (unlimited after mutual)`, dmLimitReached: 'Limit reached', dmPlaceholder: 'Send message...', dmSend: 'Send', dmSendFail: 'Failed', dmDeleteConfirm: 'Delete this conversation?', typingIsWriting: (n) => `${n} is typing...`,
+    follow: 'Follow', following: 'Following', followers: 'Followers', posts: 'Posts', followDone: 'Followed', unfollowDone: 'Unfollowed', mutual: 'Mutual', remove: 'Remove', followerRemoved: 'Follower removed', add: 'Add', messages: 'Messages', noMessages: 'No messages yet', storyPosted: 'Story posted', pin: 'Pin', unpin: 'Unpin', dmLimit1: 'Max 3 messages for one-way follow', dmLimit2: (n) => `${n}/3 sent (unlimited after mutual)`, dmLimitReached: 'Limit reached', dmPlaceholder: 'Send message...', dmSend: 'Send', dmSendFail: 'Failed', dmDeleteConfirm: 'Delete this conversation?',
     comments: 'Comments',
     footer: 'everyday',
     mood_love: 'Calm', mood_happy: 'Happy', mood_miss: 'Miss', mood_shy: 'Shy', mood_star: 'Star',
@@ -1034,7 +1059,7 @@ const i18n = {
     noPhotos: 'まだ写真がありません\n最初の写真を投稿しましょう！',
     noComments: 'まだコメントがありません',
     searchUser: 'ユーザー検索...', noSearchResult: '検索結果がありません', searchAll: 'ユーザー、投稿を検索...', users: 'ユーザー',
-    follow: 'フォロー', following: 'フォロー中', followers: 'フォロワー', posts: '投稿', followDone: 'フォローしました', unfollowDone: 'フォロー解除', mutual: '相互フォロー', remove: '削除', followerRemoved: 'フォロワーを削除しました', add: '追加', messages: 'メッセージ', noMessages: 'メッセージはまだありません', storyPosted: 'ストーリーを投稿しました', pin: 'ピン留め', unpin: 'ピン解除', dmLimit1: '片思料は最大3通', dmLimit2: (n) => `${n}/3送信済み ( 맞팔後は無制限)`, dmLimitReached: '上限', dmPlaceholder: 'メッセージを入力...', dmSend: '送信', dmSendFail: '失敗', dmDeleteConfirm: 'この会話を削除しますか?', typingIsWriting: (n) => `${n}さんが入力中...`,
+    follow: 'フォロー', following: 'フォロー中', followers: 'フォロワー', posts: '投稿', followDone: 'フォローしました', unfollowDone: 'フォロー解除', mutual: '相互フォロー', remove: '削除', followerRemoved: 'フォロワーを削除しました', add: '追加', messages: 'メッセージ', noMessages: 'メッセージはまだありません', storyPosted: 'ストーリーを投稿しました', pin: 'ピン留め', unpin: 'ピン解除', dmLimit1: '片思料は最大3通', dmLimit2: (n) => `${n}/3送信済み ( 맞팔後は無制限)`, dmLimitReached: '上限', dmPlaceholder: 'メッセージを入力...', dmSend: '送信', dmSendFail: '失敗', dmDeleteConfirm: 'この会話を削除しますか?',
     comments: 'コメント',
     footer: 'everyday',
     mood_love: '穏やか', mood_happy: '嬉しい', mood_miss: '会いたい', mood_shy: '恥ずかしい', mood_star: '星',
@@ -1077,7 +1102,7 @@ const i18n = {
     noPhotos: '还没有照片\n发第一条动态吧！',
     noComments: '还没有评论',
     searchUser: '搜索用户...', noSearchResult: '没有找到结果', searchAll: '搜索用户、动态...', users: '用户',
-    follow: '关注', following: '已关注', followers: '粉丝', posts: '作品', followDone: '关注成功', unfollowDone: '已取消关注', mutual: '互关', remove: '移除', followerRemoved: '已移除粉丝', add: '添加', messages: '私信', noMessages: '暂无私信', storyPosted: 'Story已发布', pin: '置顶', unpin: '取消置顶', dmLimit1: '单方关注最多3条消息', dmLimit2: (n) => `已发送 ${n}/3条 (互关后无限制)`, dmLimitReached: '已达上限', dmPlaceholder: '发送消息...', dmSend: '发送', dmSendFail: '发送失败', dmDeleteConfirm: '确定删除此对话吗？', typingIsWriting: (n) => `${n}正在输入...`,
+    follow: '关注', following: '已关注', followers: '粉丝', posts: '作品', followDone: '关注成功', unfollowDone: '已取消关注', mutual: '互关', remove: '移除', followerRemoved: '已移除粉丝', add: '添加', messages: '私信', noMessages: '暂无私信', storyPosted: 'Story已发布', pin: '置顶', unpin: '取消置顶', dmLimit1: '单方关注最多3条消息', dmLimit2: (n) => `已发送 ${n}/3条 (互关后无限制)`, dmLimitReached: '已达上限', dmPlaceholder: '发送消息...', dmSend: '发送', dmSendFail: '发送失败', dmDeleteConfirm: '确定删除此对话吗？',
     comments: '评论',
     footer: 'everyday',
     mood_love: '平静', mood_happy: '开心', mood_miss: '想念', mood_shy: '害羞', mood_star: '星星',
@@ -1215,104 +1240,6 @@ const dmModal = reactive({
   newMessage: ''
 })
 
-// ============ WebSocket Real-time DM ============
-
-function connectWs() {
-  if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return
-  const token = api.getToken()
-  if (!token || !currentUser.value) return
-
-  try {
-    ws = new WebSocket(`${api.getWsUrl()}?token=${token}`)
-
-    ws.onopen = () => {
-      console.log('[WS] Connected')
-      // Start ping/pong keepalive
-      clearInterval(wsPingInterval)
-      wsPingInterval = setInterval(() => {
-        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ action: 'ping' }))
-      }, 25000)
-    }
-
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data)
-        handleWsMessage(msg)
-      } catch (_) {}
-    }
-
-    ws.onclose = () => {
-      console.log('[WS] Disconnected, reconnecting in 3s...')
-      clearInterval(wsPingInterval)
-      scheduleReconnect()
-    }
-
-    ws.onerror = () => { ws.close() }
-  } catch (e) {
-    console.error('[WS] Connection error:', e)
-    scheduleReconnect()
-  }
-}
-
-function scheduleReconnect() {
-  clearTimeout(wsReconnectTimer)
-  wsReconnectTimer = setTimeout(() => {
-    if (currentUser.value) connectWs()
-  }, 3000)
-}
-
-function disconnectWs() {
-  clearTimeout(wsReconnectTimer)
-  clearInterval(wsPingInterval)
-  if (ws) { ws.close(); ws = null }
-}
-
-function handleWsMessage(msg) {
-  if (msg.type === 'message') {
-    // If this DM modal is open for the sender or receiver, append message
-    if (dmModal.show && dmModal.user &&
-        ((msg.sender_id === currentUser.value?.id && msg.receiver_id === dmModal.user.id) ||
-         (msg.sender_id === dmModal.user.id && msg.receiver_id === currentUser.value?.id))) {
-      dmModal.messages.push({
-        sender_id: msg.sender_id,
-        receiver_id: msg.receiver_id,
-        content: msg.content,
-        created_at: msg.created_at,
-      })
-      nextTick(() => {
-        const el = document.querySelector('.dm-content')
-        if (el) el.scrollTop = el.scrollHeight
-      })
-    }
-    // Refresh conversation list
-    loadDmConversations()
-    // Update unread badge if I'm the receiver
-    if (msg.receiver_id === currentUser.value?.id) fetchUnreadDmCount()
-  } else if (msg.type === 'typing') {
-    if (dmModal.show && dmModal.user && msg.from_user_id === dmModal.user.id) {
-      typingFromUser.value = { username: msg.from_username }
-      clearTimeout(dmTypingTimer)
-      dmTypingTimer = setTimeout(() => { typingFromUser.value = null }, 3000)
-    }
-  } else if (msg.type === 'system' || msg.type === 'error') {
-    // ignore
-  }
-}
-
-let dmTypingTimer = null
-
-function sendWsMessage(receiverId, content) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return false
-  ws.send(JSON.stringify({ action: 'send', receiver_id: receiverId, content }))
-  return true
-}
-
-function sendTypingIndicator(receiverId) {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return
-  ws.send(JSON.stringify({ action: 'typing', receiver_id: receiverId }))
-}
-
-
 // DM Conversations list (for DM page)
 const dmConversations = ref([])
 
@@ -1321,12 +1248,6 @@ const unreadDmCount = ref(0)
 
 // DM swipe state
 const dmSwipeState = reactive({})
-
-// WebSocket for real-time DM
-let ws = null
-let wsReconnectTimer = null
-let wsPingInterval = null
-const typingFromUser = ref(null) // { username } or null
 
 async function loadDmConversations() {
   if (!currentUser.value) return
@@ -1667,63 +1588,36 @@ async function sendDmMessage() {
     return
   }
   
-  const text = dmModal.newMessage.trim()
-  
-  // Try WebSocket first (real-time, no DB)
-  if (sendWsMessage(dmModal.user.id, text)) {
-    dmModal.messages.push({
-      sender_id: currentUser.value.id,
-      receiver_id: dmModal.user.id,
-      content: text,
-      created_at: t('timeJustNow')
-    })
-    dmModal.newMessage = ''
-    // Scroll
-    nextTick(() => {
-      const el = document.querySelector('.dm-content')
-      if (el) el.scrollTop = el.scrollHeight
-    })
+  // Check limit
+  if (!dmModal.canSendUnlimited && dmModal.sentCount >= 3) {
+    showToast(t('dmLimit1') + ' - ' + t('dmLimitReached'), 'warn')
     return
   }
   
-  // Fallback to HTTP (if WS not connected, or for mutual-follow unlimited tracking)
   try {
-    const res = await api.sendDm(dmModal.user.id, text, token)
+    const res = await api.sendDm(dmModal.user.id, dmModal.newMessage.trim(), token)
     if (res.data.code === 200) {
       dmModal.messages.push({
         sender_id: currentUser.value.id,
         receiver_id: dmModal.user.id,
-        content: text,
+        content: dmModal.newMessage.trim(),
         created_at: t('timeJustNow')
       })
       dmModal.newMessage = ''
-      try {
-        const res2 = await api.getDmHistory(dmModal.user.id, token)
-        if (res2.data.code === 200) {
-          dmModal.sentCount = res2.data.data.sent_count || 0
-          dmModal.canSendUnlimited = res2.data.data.can_send_unlimited
-        }
-      } catch (_) {}
-      loadDmConversations()
+      dmModal.sentCount++
+      // Refresh DM conversations so the new/updated chat shows in DM list
+      await loadDmConversations()
+      // Scroll to bottom
       nextTick(() => {
-        const el = document.querySelector('.dm-content')
-        if (el) el.scrollTop = el.scrollHeight
+        const dmContent = document.querySelector('.dm-content')
+        if (dmContent) dmContent.scrollTop = dmContent.scrollHeight
       })
-    } else if (res.data.code === 403) {
-      showToast(t('dmLimitReached') || 'DM limit reached', 'warn')
+    } else {
+      showToast(res.data.message || t('dmSendFail'), 'warn')
     }
   } catch (e) {
     showToast(t('dmSendFail'), 'warn')
   }
-}
-
-// Typing indicator with debounce
-let typingDebounce = null
-function onDmInputTyping() {
-  if (!dmModal.user || !dmModal.newMessage.trim()) return
-  clearTimeout(typingDebounce)
-  sendTypingIndicator(dmModal.user.id)
-  typingDebounce = setTimeout(() => {}, 3000) // reset after 3s, server handles display duration
 }
 
 const toast = reactive({ show: false, message: '', type: 'success' })
@@ -1750,36 +1644,6 @@ function showConfirm(message, onConfirm, icon = icons.trash) {
 
 // Quote rotation
 let quoteInterval = null
-
-// Line icons
-const icons = {
-  edit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`,
-  lock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>`,
-  unlock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg>`,
-  trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`,
-  warn: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
-  pin: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6m0 0a4 4 0 014 4v2h-8v-2a4 4 0 014-4z"/><path d="M8 14v6l4-2 4 2v-6"/></svg>`,
-  unpin: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6m0 0a4 4 0 014 4v2h-8v-2a4 4 0 014-4z"/><path d="M8 14l-2 4m4-2l-2 2m4 0l2 2m-2-2l2 4"/></svg>`,
-  location: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>`,
-  sparkle: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z"/></svg>`,
-  camera: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>`,
-  comment: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z"/></svg>`,
-  heart: `<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>`,
-  sun: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`,
-  moon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>`,
-  flower: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="3"/><path d="M12 2a3 3 0 00-3 3c0 1.3.84 2.4 2 2.82"/><path d="M12 2a3 3 0 013 3c0 1.3-.84 2.4-2 2.82"/><path d="M5.08 7.02a3 3 0 00.67 4.18c1.1.72 2.56.55 3.48-.35"/><path d="M18.92 7.02a3 3 0 01-.67 4.18c-1.1.72-2.56.55-3.48-.35"/><path d="M8 13a3 3 0 003 3c1.3 0 2.4-.84 2.82-2"/><path d="M16 13a3 3 0 01-3 3c-1.3 0-2.4-.84-2.82-2"/><path d="M12 16v5"/><path d="M8 21h8"/></svg>`,
-  leaf: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66L7 19c4-4 8-5 12-5 0-2.5 0-5-2-6z"/><path d="M11 14l-1.5 1.5"/></svg>`,
-  smile: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>`,
-  tear: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.5 8 4 12 4 15a8 8 0 0016 0c0-3-2.5-7-8-13z"/></svg>`,
-  shy: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="10.5" y2="10"/><line x1="15" y1="9" x2="13.5" y2="10"/></svg>`,
-  star: `<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>`,
-  book: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>`,
-  party: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l4 4-4 4"/><path d="M12 16h7"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/></svg>`,
-  secret: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/><circle cx="12" cy="16" r="1"/></svg>`,
-  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
-  profile: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
-  bookmark: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>`,
-}
 
 // Stories
 const stories = ref([
@@ -1883,7 +1747,6 @@ async function handleAuth() {
         currentUser.value = res.data.user
         initProfileEdit()
         showToast(t('registerOk'))
-        connectWs()
         authUsername.value = ''
         authPassword.value = ''
         authNickname.value = ''
@@ -1904,7 +1767,6 @@ async function handleAuth() {
         authUsername.value = ''
         authPassword.value = ''
         fetchData()
-        connectWs()
         fetchMyContent()
         activeSection.value = pendingSection.value || 'home'
         pendingSection.value = null
@@ -1928,7 +1790,6 @@ function logout() {
   editEmail.value = ''
   oldPassword.value = ''
   newPassword.value = ''
-  disconnectWs()
   showToast(t('logout'))
   fetchData()
   activeSection.value = 'login'
@@ -2606,7 +2467,6 @@ function onDmItemTouchEnd(userId) {
   
   if (shouldOpen) {
     state.translateX = -140
-    closeOtherDmSwipes(userId)
   } else {
     state.translateX = 0
   }
@@ -2615,26 +2475,13 @@ function onDmItemTouchEnd(userId) {
   if (wrap) {
     const itemEl = wrap.querySelector('.dm-conv-item')
     if (itemEl) itemEl.style.transform = `translateX(${state.translateX}px)`
-    wrap.classList.toggle('swiped-open', shouldOpen)
   }
 }
 
 // Reset all swipes when clicking elsewhere
 function resetAllDmSwipes() {
-  document.querySelectorAll('.dm-conv-item-wrap').forEach(el => {
-    const item = el.querySelector('.dm-conv-item')
-    if (item) item.style.transform = ''
-    el.classList.remove('swiped-open')
-  })
-}
-
-function closeOtherDmSwipes(currentId) {
-  document.querySelectorAll('.dm-conv-item-wrap.swiped-open').forEach(el => {
-    if (el.dataset.userId !== String(currentId)) {
-      const item = el.querySelector('.dm-conv-item')
-      if (item) item.style.transform = ''
-      el.classList.remove('swiped-open')
-    }
+  document.querySelectorAll('.dm-conv-item-wrap .dm-conv-item').forEach(el => {
+    el.style.transform = 'translateX(0)'
   })
 }
 
@@ -2692,11 +2539,8 @@ function onDmItemMouseDown(e, userId) {
           
           if (currentX < -60) {
             itemEl.style.transform = 'translateX(-140px)'
-            wrap.classList.add('swiped-open')
-            closeOtherDmSwipes(userId)
           } else {
             itemEl.style.transform = 'translateX(0)'
-            wrap.classList.remove('swiped-open')
           }
         }
       }
@@ -2728,8 +2572,7 @@ async function pinDmConv(userId) {
         if (!a.isPinned && b.isPinned) return 1
         return (b.time || '').localeCompare(a.time || '')
       })
-      nextTick(() => resetAllDmSwipes())
-      showToast(newPin ? t('pin') + ' OK' : t('unpin') + ' OK')
+      showToast(newPin ? t('pin') + ' ✓' : t('unpin') + ' ✓')
     }
   } catch (e) {}
 }
@@ -2741,7 +2584,7 @@ async function deleteDmConv(userId) {
     const res = await api.deleteDmConversation(userId, api.getToken())
     if (res.data.code === 200) {
       dmConversations.value = dmConversations.value.filter(c => c.user.id !== userId)
-      showToast(t('deleteMsg') + ' OK')
+      showToast(t('deleteMsg') + ' ✓')
     }
   } catch (e) {}
 }
@@ -2917,7 +2760,7 @@ onMounted(() => {
     mainEl.addEventListener('touchend', onTouchEnd)
   }
   setupInfiniteScroll()
-  checkAuth().then(() => { fetchData(); fetchMyContent(); if (currentUser.value) connectWs() })
+  checkAuth().then(() => { fetchData(); fetchMyContent() })
   window.addEventListener('keydown', onKeyDown)
   quoteInterval = setInterval(() => {
     currentQuote.value = (currentQuote.value + 1) % 3
@@ -2934,7 +2777,6 @@ onUnmounted(() => {
   }
   scrollObserver?.disconnect()
   if (quoteInterval) clearInterval(quoteInterval)
-  disconnectWs()
 })
 </script>
 
@@ -3152,8 +2994,6 @@ body{
 .dm-time{font-size:10.5px;color:var(--text-light);opacity:0.7}
 .dm-read{font-size:11px;color:var(--accent);font-weight:600;letter-spacing:1px}
 .dm-input-wrap{padding:14px 16px 16px;background:var(--bg);border-top:1px solid rgba(0,0,0,0.06)}
-.typing-indicator{font-size:12px;color:var(--text-light);padding:0 4px 6px;animation:pulse 1.5s infinite}
-@keyframes pulse{0%,100%{opacity:0.5}50%{opacity:1}}
 .dm-input-box{display:flex;align-items:center;gap:8px;background:var(--bg-card);border-radius:26px;padding:4px 6px 4px 16px;border:1.5px solid rgba(0,0,0,0.08);transition:border-color .2s,box-shadow .2s}
 .dm-input-box:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(var(--accent-rgb),0.12)}
 .dm-input-box input{flex:1;border:none;background:transparent;font-size:14px;color:var(--text);padding:10px 4px;outline:none;min-width:0}
@@ -3192,16 +3032,15 @@ body{
 .dm-list-page{padding:0}
 .dm-empty{text-align:center;padding:60px 20px;color:var(--text-light);font-size:14px}
 .dm-conv-item-wrap{position:relative;overflow:hidden;-webkit-overflow-scrolling:touch}
-.dm-conv-actions{position:absolute;right:0;top:0;bottom:0;display:flex;align-items:center;z-index:1;width:140px;flex-shrink:0;gap:6px;padding:0 8px;background:var(--bg-card);opacity:0;pointer-events:none;transition:opacity 0.25s ease}
-.dm-conv-item-wrap.swiped-open .dm-conv-actions{opacity:1;pointer-events:auto}
-.dm-action-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;height:44px;font-size:10px;font-weight:600;border:none;cursor:pointer;flex:1;border-radius:10px;transition:transform 0.15s,opacity 0.15s,box-shadow 0.2s;letter-spacing:0.3px;color:#fff}
+.dm-conv-actions{position:absolute;right:0;top:0;bottom:0;display:flex;align-items:center;z-index:1;width:140px;flex-shrink:0;gap:6px;padding:0 8px}
+.dm-action-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;height:56px;font-size:11px;font-weight:600;border:none;cursor:pointer;flex:1;border-radius:12px;transition:transform 0.15s,opacity 0.15s;letter-spacing:0.3px}
 .dm-action-btn:active{transform:scale(0.92);opacity:0.85}
-.pin-btn{background:linear-gradient(135deg,#a29bfe,#6c5ce7);box-shadow:0 2px 12px rgba(108,92,231,0.35)}
-.pin-btn .btn-icon{margin-bottom:1px}
-.pin-btn .btn-icon svg{width:16px;height:16px}
-.delete-btn{background:linear-gradient(135deg,#fd79a8,#e17055);box-shadow:0 2px 12px rgba(225,112,85,0.35)}
-.delete-btn .btn-icon{margin-bottom:1px}
-.delete-btn .btn-icon svg{width:16px;height:16px}
+.pin-btn{background:linear-gradient(135deg,#FFD43B,#F59F00);color:#5a3e00;box-shadow:0 2px 8px rgba(245,159,0,0.3)}
+.pin-btn .btn-icon{margin-bottom:2px}
+.pin-btn .btn-icon svg{width:18px;height:18px}
+.delete-btn{background:linear-gradient(135deg,#FF6B6B,#EE5A24);color:#fff;box-shadow:0 2px 8px rgba(238,90,36,0.3)}
+.delete-btn .btn-icon{margin-bottom:2px}
+.delete-btn .btn-icon svg{width:18px;height:18px}
 .dm-conv-item{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border-light);cursor:pointer;background:var(--bg-card);position:relative;z-index:2;transition:transform 0.25s ease-out;will-change:transform}
 .dm-conv-item:active{background:var(--bg)}
 .dm-conv-item.pinned{background:var(--bg-light)}
@@ -3519,18 +3358,16 @@ body{
 .btn-confirm:hover:not(:disabled){opacity:0.9}
 .btn-confirm:disabled{opacity:0.4;cursor:not-allowed}
 
-/* ============ COMMENTS MODAL ============ */
-.comment-modal-overlay{position:fixed;inset:0;z-index:9998;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
-.comment-modal{width:92%;max-width:480px;max-height:78vh;background:var(--bg-card);border-radius:20px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.25),0 8px 24px rgba(0,0,0,0.15);display:flex;flex-direction:column}
-.cp-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border-light);background:var(--bg-card)}
-.cp-back,.cp-close{border:none;background:transparent;font-size:18px;cursor:pointer;padding:6px 10px;border-radius:10px;transition:all 0.15s ease;color:var(--text)}
-.cp-back:hover,.cp-close:hover{background:var(--bg);opacity:0.7}
-.cp-close svg{width:20px;height:20px}
+/* ============ COMMENTS PANEL ============ */
+.comments-panel{position:fixed;inset:0;z-index:9998;background:var(--bg);display:flex;flex-direction:column}
+.cp-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border-light);background:var(--bg-card)}
+.cp-back,.cp-close{border:none;background:transparent;font-size:18px;cursor:pointer;padding:6px 8px;border-radius:8px;transition:all 0.15s ease;color:var(--text)}
+.cp-back:hover,.cp-close:hover{background:var(--bg)}
 .cp-title{font-size:16px;font-weight:600}
-.cp-list{flex:1;overflow-y:auto;padding:16px 18px;max-height:50vh}
-.cp-item{display:flex;gap:12px;margin-bottom:14px}
+.cp-list{flex:1;overflow-y:auto;padding:16px;max-height:66vh;overflow-y:auto}
+.cp-item{display:flex;gap:12px;margin-bottom:16px}
 .cp-avatar{
-  width:30px;height:30px;border-radius:50%;background:#f0f0f0;color:var(--text-light);
+  width:32px;height:32px;border-radius:50%;background:#f0f0f0;color:var(--text-light);
   display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex-shrink:0;
   background-size:cover;background-position:center;
 }
@@ -3548,20 +3385,13 @@ body{
 .cp-edit-input{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;background:var(--bg);color:var(--text);outline:none;margin-bottom:6px}
 .cp-edit-input:focus{border-color:var(--text)}
 .cp-edit-actions{display:flex;gap:6px;justify-content:flex-end}
-.cp-empty{text-align:center;padding:40px 0;color:var(--text-light);font-size:13px}
+.cp-empty{text-align:center;padding:60px 0;color:var(--text-light);font-size:14px}
 .cp-input-bar{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border-light);background:var(--bg-card)}
 .cp-name{width:70px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:var(--bg);color:var(--text);outline:none}
 .cp-input{flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:var(--bg);color:var(--text);outline:none}
 .cp-input:focus,.cp-name:focus{border-color:var(--text)}
-.cp-send{border:1px solid var(--accent);background:var(--accent);color:#fff;padding:8px 14px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.15s ease}
+.cp-send{border:1px solid var(--border);background:var(--bg-card);color:var(--text);padding:8px 14px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.15s ease}
 .cp-send:hover{opacity:0.9}
-
-/* Modal transitions */
-.fade-enter-active,.fade-leave-active{transition:opacity 0.25s ease}
-.fade-enter-from,.fade-leave-to{opacity:0}
-.scale-in-enter-active,.scale-in-leave-active{transition:transform 0.28s cubic-bezier(0.34,1.56,0.64,1),opacity 0.25s ease}
-.scale-in-enter-from,.scale-in-leave-to{transform:scale(0.92) translateY(16px);opacity:0}
-
 .slide-up-enter-active,.slide-up-leave-active{transition:transform 0.3s cubic-bezier(0.4,0,0.2,1)}
 .slide-up-enter-from,.slide-up-leave-to{transform:translateY(100%)}
 
@@ -3704,7 +3534,7 @@ body{
 .dark-mode .upload-modal{background:var(--bg-card)}
 .dark-mode .settings-logout:hover{background:#2a1515;border-color:#3a2020}
 .dark-mode .ppm-wrap{background:var(--bg-card)}
-.dark-mode .comment-modal{background:var(--bg-card)}
+.dark-mode .comments-panel{background:var(--bg-card)}
 .dark-mode .login-tab{color:var(--text-light)}
 .dark-mode .login-tab.active{color:var(--text);background:var(--bg-card)}
 .dark-mode .section-title{color:var(--text)}
