@@ -1752,7 +1752,7 @@ async function handleAuth() {
         authNickname.value = ''
         fetchData()
         fetchMyContent()
-        activeSection.value = pendingSection.value || 'home'
+        activeSection.value = pendingSection.value || 'gallery'
         pendingSection.value = null
       } else {
         authError.value = res.data.detail || t('authFail')
@@ -1768,7 +1768,7 @@ async function handleAuth() {
         authPassword.value = ''
         fetchData()
         fetchMyContent()
-        activeSection.value = pendingSection.value || 'home'
+        activeSection.value = pendingSection.value || 'gallery'
         pendingSection.value = null
       } else {
         authError.value = res.data.detail || t('authFail')
