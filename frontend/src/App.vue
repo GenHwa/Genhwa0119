@@ -517,46 +517,47 @@
         </div>
       </section>
 
-      <!-- ===== COMMENTS FULL ===== -->
-      <transition name="slide-up">
-        <div v-if="showCommentsPanel" class="comments-panel">
-          <div class="cp-header">
-            <button class="cp-back" @click="showCommentsPanel = false">←</button>
-            <span class="cp-title">{{ t('comments') }}</span>
-            <div style="width:24px"></div>
-          </div>
-          <div class="cp-list">
-            <div v-for="c in commentsList" :key="c.id" class="cp-item">
-              <div class="cp-avatar" :class="{ 'no-avatar-text': c.avatar }">
-                <img v-if="c.avatar" :src="UPLOAD_BASE + c.avatar" class="avatar-img" />
-                <span v-else>{{ c.nickname.charAt(0) }}</span>
-              </div>
-              <div class="cp-body">
-                <div class="cp-meta">
-                  <strong>{{ c.nickname }}</strong>
-                  <span class="cp-time">{{ formatTimeAgo(c.created_at) }}</span>
-                  <div v-if="isCommentOwner(c)" class="cp-actions">
-                    <button class="cp-action-btn" @click="startEditComment(c)" title="edit"><span class="icon-line icon-sm" v-html="icons.edit"></span></button>
-                    <button class="cp-action-btn cp-delete" @click="handleDeleteComment(c.id)" title="delete"><span class="icon-line icon-sm icon-delete" v-html="icons.trash"></span></button>
-                  </div>
-                </div>
-                <div v-if="editingCommentId === c.id" class="cp-edit-wrap">
-                  <input v-model="editingCommentContent" class="cp-edit-input" @keyup.enter="confirmEditComment(c.id)" />
-                  <div class="cp-edit-actions">
-                    <button class="btn-cancel" @click="editingCommentId = null" style="font-size:12px;padding:6px 12px">{{ t('cancel') }}</button>
-                    <button class="btn-confirm" @click="confirmEditComment(c.id)" style="font-size:12px;padding:6px 12px">{{ t('save') }}</button>
-                  </div>
-                </div>
-                <p v-else>{{ c.content }}</p>
-              </div>
+      <!-- ===== COMMENTS MODAL ===== -->
+      <transition name="fade">
+        <div v-if="showCommentsPanel" class="modal-overlay" @click.self="showCommentsPanel = false">
+          <div class="comments-modal">
+            <div class="cp-header">
+              <span class="cp-title">{{ t('comments') }}</span>
+              <button class="cp-close" @click="showCommentsPanel = false">x</button>
             </div>
-            <div v-if="!commentsList.length" class="cp-empty">{{ t('noComments') }}</div>
-          </div>
-          <div class="cp-input-bar">
-            <input v-model="commentNickname" :placeholder="t('yourName')" class="cp-name" />
-            <input v-model="commentText" :placeholder="t('addComment')" class="cp-input"
-              @keyup.enter="submitComment" />
-            <button class="cp-send" @click="submitComment">{{ t('post') }}</button>
+            <div class="cp-list">
+              <div v-for="c in commentsList" :key="c.id" class="cp-item">
+                <div class="cp-avatar" :class="{ 'no-avatar-text': c.avatar }">
+                  <img v-if="c.avatar" :src="UPLOAD_BASE + c.avatar" class="avatar-img" />
+                  <span v-else>{{ c.nickname.charAt(0) }}</span>
+                </div>
+                <div class="cp-body">
+                  <div class="cp-meta">
+                    <strong>{{ c.nickname }}</strong>
+                    <span class="cp-time">{{ formatTimeAgo(c.created_at) }}</span>
+                    <div v-if="isCommentOwner(c)" class="cp-actions">
+                      <button class="cp-action-btn" @click="startEditComment(c)" title="edit"><span class="icon-line icon-sm" v-html="icons.edit"></span></button>
+                      <button class="cp-action-btn cp-delete" @click="handleDeleteComment(c.id)" title="delete"><span class="icon-line icon-sm icon-delete" v-html="icons.trash"></span></button>
+                    </div>
+                  </div>
+                  <div v-if="editingCommentId === c.id" class="cp-edit-wrap">
+                    <input v-model="editingCommentContent" class="cp-edit-input" @keyup.enter="confirmEditComment(c.id)" />
+                    <div class="cp-edit-actions">
+                      <button class="btn-cancel" @click="editingCommentId = null" style="font-size:12px;padding:6px 12px">{{ t('cancel') }}</button>
+                      <button class="btn-confirm" @click="confirmEditComment(c.id)" style="font-size:12px;padding:6px 12px">{{ t('save') }}</button>
+                    </div>
+                  </div>
+                  <p v-else>{{ c.content }}</p>
+                </div>
+              </div>
+              <div v-if="!commentsList.length" class="cp-empty">{{ t('noComments') }}</div>
+            </div>
+            <div class="cp-input-bar">
+              <input v-model="commentNickname" :placeholder="t('yourName')" class="cp-name" />
+              <input v-model="commentText" :placeholder="t('addComment')" class="cp-input"
+                @keyup.enter="submitComment" />
+              <button class="cp-send" @click="submitComment">{{ t('post') }}</button>
+            </div>
           </div>
         </div>
       </transition>
@@ -3358,13 +3359,13 @@ body{
 .btn-confirm:hover:not(:disabled){opacity:0.9}
 .btn-confirm:disabled{opacity:0.4;cursor:not-allowed}
 
-/* ============ COMMENTS PANEL ============ */
-.comments-panel{position:fixed;inset:0;z-index:9998;background:var(--bg);display:flex;flex-direction:column}
-.cp-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border-light);background:var(--bg-card)}
-.cp-back,.cp-close{border:none;background:transparent;font-size:18px;cursor:pointer;padding:6px 8px;border-radius:8px;transition:all 0.15s ease;color:var(--text)}
-.cp-back:hover,.cp-close:hover{background:var(--bg)}
-.cp-title{font-size:16px;font-weight:600}
-.cp-list{flex:1;overflow-y:auto;padding:16px;max-height:66vh;overflow-y:auto}
+/* ============ COMMENTS MODAL ============ */
+.comments-modal{width:440px;max-width:92vw;max-height:75vh;border-radius:18px;background:var(--bg-card);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 16px 48px rgba(0,0,0,0.15),0 4px 12px rgba(0,0,0,0.08)}
+.cp-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border-light);background:var(--bg-card);border-radius:18px 18px 0 0}
+.cp-close{border:none;background:transparent;font-size:20px;cursor:pointer;padding:6px 10px;border-radius:8px;color:var(--text-secondary);transition:all 0.15s ease;line-height:1}
+.cp-close:hover{background:var(--bg);color:var(--text)}
+.cp-title{font-size:16px;font-weight:600;color:var(--text)}
+.cp-list{flex:1;overflow-y:auto;padding:18px;max-height:46vh;overflow-y:auto}
 .cp-item{display:flex;gap:12px;margin-bottom:16px}
 .cp-avatar{
   width:32px;height:32px;border-radius:50%;background:#f0f0f0;color:var(--text-light);
@@ -3386,7 +3387,7 @@ body{
 .cp-edit-input:focus{border-color:var(--text)}
 .cp-edit-actions{display:flex;gap:6px;justify-content:flex-end}
 .cp-empty{text-align:center;padding:60px 0;color:var(--text-light);font-size:14px}
-.cp-input-bar{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border-light);background:var(--bg-card)}
+.cp-input-bar{display:flex;gap:8px;padding:14px 18px;border-top:1px solid var(--border-light);background:var(--bg-card);border-radius:0 0 18px 18px}
 .cp-name{width:70px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:var(--bg);color:var(--text);outline:none}
 .cp-input{flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;background:var(--bg);color:var(--text);outline:none}
 .cp-input:focus,.cp-name:focus{border-color:var(--text)}
@@ -3534,7 +3535,7 @@ body{
 .dark-mode .upload-modal{background:var(--bg-card)}
 .dark-mode .settings-logout:hover{background:#2a1515;border-color:#3a2020}
 .dark-mode .ppm-wrap{background:var(--bg-card)}
-.dark-mode .comments-panel{background:var(--bg-card)}
+.dark-mode .comments-modal{background:var(--bg-card);box-shadow:0 16px 48px rgba(0,0,0,0.4)}
 .dark-mode .login-tab{color:var(--text-light)}
 .dark-mode .login-tab.active{color:var(--text);background:var(--bg-card)}
 .dark-mode .section-title{color:var(--text)}
